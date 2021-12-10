@@ -1,3 +1,5 @@
+use crate::utility::*;
+
 use std::fs::File;
 use std::io::{Read, Write, BufReader, BufWriter};
 use std::error::Error;
@@ -10,6 +12,7 @@ pub struct RgbaImage {
 }
 
 impl RgbaImage {
+    /// Create an empty image with the given width and height
     pub fn new(width: usize, height: usize) -> Self {
         RgbaImage {
             width, height,
@@ -25,12 +28,26 @@ impl RgbaImage {
         self.height
     }
 
-    pub fn get(&self, x: usize, y: usize) -> &[u8; 4] {
-        &self.data[x + y * self.width]
+    pub fn aspect_ratio(&self) -> Real {
+        self.width as Real / self.height as Real
     }
 
-    pub fn get_mut(&mut self, x: usize, y: usize) -> &mut [u8; 4] {
-        &mut self.data[x + y * self.width]
+    /// Get the UV coordinates (i.e. in the range [0, 1]) of a pixel
+    pub fn uv(&self, i: usize, j: usize) -> Point2 {
+        point2(
+            i as Real / self.width as Real,
+            j as Real / self.height as Real
+        )
+    }
+
+    /// Access a pixel immutably
+    pub fn get(&self, i: usize, j: usize) -> &[u8; 4] {
+        &self.data[i + j * self.width]
+    }
+
+    /// Access a pixel mutably
+    pub fn get_mut(&mut self, i: usize, j: usize) -> &mut [u8; 4] {
+        &mut self.data[i + j * self.width]
     }
 }
 
