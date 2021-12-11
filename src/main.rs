@@ -33,12 +33,18 @@ fn main() {
         }
     };
 
+    // Samples per pixel
+    let num_samples = 10;
+    
     // Render the image
     for j in (0..output.height()).rev() {
         for i in 0..output.width() {
-            let ray = camera.shoot(output.uv(i, j));
-            let color = hit_scene(ray);
-            *output.get_mut(i, j) = to_u8(color);
+            let mut color = rgb(0.0, 0.0, 0.0);
+            for s in output.samples_jitter(i, j, num_samples) {
+                let ray = camera.shoot(s);
+                color += hit_scene(ray);
+            }
+            *output.get_mut(i, j) = to_u8(color / num_samples as Real);
         }
     }
 

@@ -32,12 +32,22 @@ impl RgbaImage {
         self.width as Real / self.height as Real
     }
 
-    /// Get the UV coordinates (i.e. in the range [0, 1]) of a pixel
-    pub fn uv(&self, i: usize, j: usize) -> Point2 {
+    /// Get the sample coordinates of a pixel, in the range [0, 1]
+    pub fn sample(&self, i: usize, j: usize) -> Point2 {
         point2(
             i as Real / self.width as Real,
             j as Real / self.height as Real
         )
+    }
+
+    /// Get multiple samples coordinates for a pixel, in the range [0, 1]
+    pub fn samples_jitter(&self, i: usize, j: usize, num_samples: usize) -> Vec<Point2> {
+        (0..num_samples).map(|_| {
+            point2(
+                (i as Real + rand::random::<Real>()) / self.width as Real,
+                (j as Real + rand::random::<Real>()) / self.height as Real
+            )
+        }).collect()
     }
 
     /// Access a pixel immutably
