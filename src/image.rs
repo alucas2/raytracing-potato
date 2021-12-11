@@ -41,11 +41,11 @@ impl RgbaImage {
     }
 
     /// Get multiple samples coordinates for a pixel, in the range [0, 1]
-    pub fn samples_jitter(&self, i: usize, j: usize, num_samples: usize) -> Vec<Point2> {
+    pub fn samples_jitter(&self, i: usize, j: usize, num_samples: usize, rng: &mut ThreadRng) -> Vec<Point2> {
         (0..num_samples).map(|_| {
             point2(
-                (i as Real + rand::random::<Real>()) / self.width as Real,
-                (j as Real + rand::random::<Real>()) / self.height as Real
+                (i as Real + rng.gen::<Real>()) / self.width as Real,
+                (j as Real + rng.gen::<Real>()) / self.height as Real
             )
         }).collect()
     }

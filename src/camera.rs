@@ -15,15 +15,18 @@ impl Camera {
         let tan_fov = (0.5 * self.fov).tan();
 
         // Ray direction in local frame
-        let a = vec3(
+        let direction = vec3(
             (2.0 * image_uv.x - 1.0) * tan_fov * self.aspect_ratio,
             (2.0 * image_uv.y - 1.0) * tan_fov,
             -self.focal_dist
         );
         
         // Ray origin in local frame
-        let b = point3(0.0, 0.0, 0.0);
+        let origin = point3(0.0, 0.0, 0.0);
 
-        Ray {a, b}
+        // Ray initial attenuation = none
+        let attenuation = rgb(1.0, 1.0, 1.0);
+
+        Ray {direction, origin, attenuation}
     }
 }

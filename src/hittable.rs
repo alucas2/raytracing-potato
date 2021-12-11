@@ -3,7 +3,7 @@ use crate::utility::*;
 // ------------------------------------------- Hittable -------------------------------------------
 
 pub enum Hittable {
-    Sphere {center: Point3, radius: Real},
+    Sphere {center: Point3, radius: Real, material_id: Id},
     List(Vec<Hittable>),
 }
 
@@ -11,23 +11,26 @@ pub struct Hit {
     pub t: Real,
     pub position: Point3,
     pub normal: Vector3, // The normal is assumed to be a unit vector
+    pub material_id: Id,
 }
 
 impl Hittable {
     pub fn hit(&self, ray: Ray, t_min: Real, t_max: Real) -> Option<Hit> {
         match self {
-            Self::Sphere {center, radius} => hit_sphere(*center, *radius, ray, t_min, t_max),
-            Self::List(list) => hit_list(list, ray, t_min, t_max),
+            Self::Sphere {center, radius, material_id}
+                => hit_sphere(*center, *radius, *material_id, ray, t_min, t_max),
+            Self::List(list)
+                => hit_list(list, ray, t_min, t_max),
         }
     }
 }
 
 // ------------------------------------------- Hit implementations -------------------------------------------
 
-fn hit_sphere(center: Point3, radius: Real, ray: Ray, t_min: Real, t_max: Real) -> Option<Hit> {
-    let to_center = ray.b - center;
-    let a = ray.a.magnitude2();
-    let half_b = ray.a.dot(to_center);
+fn hit_sphere(center: Point3, radius: Real, material_id: Id, ray: Ray, t_min: Real, t_max: Real) -> Option<Hit> {
+    let to_center = ray.origin - center;
+    let a = ray.direction.magnitude2();
+    let half_b = ray.direction.dot(to_center);
     let c = to_center.magnitude2() - radius*radius;
     let delta = half_b*half_b - a*c;
     if delta <= 0.0 {
@@ -45,7 +48,7 @@ fn hit_sphere(center: Point3, radius: Real, ray: Ray, t_min: Real, t_max: Real) 
 
     let position = ray.at(t);
     let normal = (position - center).normalize();
-    Some(Hit {t, position, normal})
+    Some(Hit {t, position, normal, material_id})
 }
 
 fn hit_list(list: &[Hittable], ray: Ray, t_min: Real, mut t_max: Real) -> Option<Hit> {
