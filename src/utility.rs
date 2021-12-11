@@ -87,4 +87,13 @@ mod random {
             }
         }
     }
+
+    /// A distribution with a probability p for true and 1-p of false
+    pub struct Bernoulli(Real);
+
+    impl Distribution<bool> for Bernoulli {
+        fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> bool {
+            rng.gen::<Real>() < self.0
+        }
+    }
 }

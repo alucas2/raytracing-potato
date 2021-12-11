@@ -52,8 +52,8 @@ fn main() {
     let material_table = vec![
         Material::Lambert {albedo: rgb(0.8, 0.8, 0.0)},
         Material::Lambert {albedo: rgb(0.7, 0.3, 0.3)},
-        Material::Metal {albedo: rgb(0.8, 0.8, 0.8)},
-        Material::Metal {albedo: rgb(0.8, 0.6, 0.2)},
+        Material::Metal {albedo: rgb(0.8, 0.8, 0.8), fuzziness: 0.3},
+        Material::Metal {albedo: rgb(0.8, 0.6, 0.2), fuzziness: 1.0},
     ];
 
     // List of object of the scene
