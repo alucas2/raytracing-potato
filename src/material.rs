@@ -2,6 +2,7 @@ use crate::{utility::*, hittable::Hit};
 
 // ------------------------------------------- Material -------------------------------------------
 
+#[derive(Clone)]
 pub enum Material {
     Lambert {albedo: Color},
     Metal {albedo: Color, fuzziness: Real},

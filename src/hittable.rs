@@ -4,6 +4,7 @@ use crate::utility::*;
 
 // ------------------------------------------- Hittable -------------------------------------------
 
+#[derive(Clone)]
 pub enum Hittable {
     Sphere {center: Vector3, radius: Real, material_id: Id},
     List(Vec<Hittable>),

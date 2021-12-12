@@ -4,6 +4,8 @@ use raytracing2::camera::*;
 use raytracing2::hittable::*;
 use raytracing2::material::*;
 use std::time::Instant;
+use std::sync::{Arc, Mutex};
+use std::thread;
 use indicatif::ProgressBar;
 
 fn scene_normals(scene: &Hittable, ray: Ray) -> Color {
@@ -90,39 +92,70 @@ fn main() {
     // Renderer parameters
     let max_bounce = 10;
     let tile_size = 64;
+    let num_workers = 4;
 
     let sampler = Multisampler {
         width: output_width,
         height: output_height,
-        num_samples: 16,
+        num_samples: 128,
     };
     
-    // Render the image
-    let mut tiles = Tile::new(output_width, output_height, tile_size, tile_size);
-    let mut rng = Randomizer::from_entropy();
+    let job_queue = Tile::generate(output_width, output_height, tile_size, tile_size);
+    let progress_bar = ProgressBar::new(job_queue.len() as _);
+    
+    let job_queue = Arc::new(Mutex::new(job_queue));
+    let complete_jobs = Arc::new(Mutex::new(Vec::new()));
     let t0 = Instant::now();
-    let pbar = ProgressBar::new(tiles.len() as _);
-    pbar.set_message("Rendering...");
+    
+    // Start the rendering workers
+    let workers: Vec<_> = (0..num_workers).map(|_| {
+        let job_queue = Arc::clone(&job_queue);
+        let complete_jobs = Arc::clone(&complete_jobs);
+        let mut rng = Randomizer::from_entropy();
+        let progress_bar = progress_bar.clone();
+        let scene = scene.clone();
+        let material_table = material_table.clone();
+        let sampler = sampler.clone();
+        let camera = camera.clone();
 
-    for tile in tiles.iter_mut() {
-        for j in 0..tile.pixels.height() {
-            for i in 0..tile.pixels.width() {
-                let mut color = rgb(0.0, 0.0, 0.0);
-                for s in sampler.samples_jitter(i + tile.pixel_offset.0, j + tile.pixel_offset.1, &mut rng) {
-                    let ray = camera.shoot(s, &mut rng);
-                    color += hit_scene(&scene, ray, max_bounce, &material_table, &mut rng);
+        thread::spawn(move || {
+            loop {
+                let job = {
+                    // Momentarily lock the job queue to pop a new job
+                    job_queue.lock().unwrap().pop()
+                };
+
+                if let Some(mut tile) = job {
+                    for tj in 0..tile.height() {
+                        for ti in 0..tile.width() {
+                            let mut color = rgb(0.0, 0.0, 0.0);
+                            for s in sampler.samples_jitter(ti + tile.offset_i(), tj + tile.offset_j(), &mut rng) {
+                                let ray = camera.shoot(s, &mut rng);
+                                color += hit_scene(&scene, ray, max_bounce, &material_table, &mut rng);
+                            }
+                            *tile.get_mut(ti, tj) = to_srgb_u8(color / sampler.num_samples as Real);
+                        }
+                    }
+                    // Push the finished job
+                    complete_jobs.lock().unwrap().push(tile);
+                    progress_bar.inc(1);
+                } else {
+                    break
                 }
-                *tile.pixels.get_mut(i, j) = to_srgb_u8(color / sampler.num_samples as Real);
             }
-        }
-        pbar.inc(1);
+        })
+    }).collect();
+
+    for w in workers {
+        w.join().unwrap();
     }
-    pbar.finish();
+
+    progress_bar.finish();
     println!("Rendering done in {:.2} seconds", t0.elapsed().as_secs_f64());
 
     // Combine the tiles
     let mut output = RgbaImage::new(output_width, output_height);
-    for tile in tiles {
+    for tile in complete_jobs.lock().unwrap().iter() {
         tile.write_to(&mut output);
     }
 

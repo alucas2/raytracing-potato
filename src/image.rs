@@ -143,12 +143,12 @@ pub mod tga {
 // ------------------------------------------- Image tiling -------------------------------------------
 
 pub struct Tile {
-    pub pixel_offset: (u32, u32),
-    pub pixels: RgbaImage,
+    pixel_offset: (u32, u32),
+    data: RgbaImage,
 }
 
 impl Tile {
-    pub fn new(full_width: u32, full_height: u32, tile_width: u32, tile_height: u32) -> Vec<Self> {
+    pub fn generate(full_width: u32, full_height: u32, tile_width: u32, tile_height: u32) -> Vec<Self> {
         let num_tiles_i = (full_width + tile_width - 1) / tile_width;
         let num_tiles_j = (full_height + tile_height - 1) / tile_height;
         let mut tiles = Vec::new();
@@ -156,21 +156,47 @@ impl Tile {
         for tj in 0..num_tiles_j {
             for ti in 0..num_tiles_i {
                 let pixel_offset = (ti * tile_width, tj * tile_height);
-                let pixels = RgbaImage::new(
+                let data = RgbaImage::new(
                     tile_width.min(full_width - pixel_offset.0),
                     tile_height.min(full_height - pixel_offset.1),
                 );
-                tiles.push(Tile {pixel_offset, pixels}); 
+                tiles.push(Tile {pixel_offset, data}); 
             }
         }
         tiles
     }
 
     pub fn write_to(&self, full_image: &mut RgbaImage) {
-        for j in 0..self.pixels.height {
-            for i in 0..self.pixels.width {
-                *full_image.get_mut(i + self.pixel_offset.0, j + self.pixel_offset.1) = *self.pixels.get(i, j);
+        for j in 0..self.data.height {
+            for i in 0..self.data.width {
+                *full_image.get_mut(i + self.pixel_offset.0, j + self.pixel_offset.1) = *self.data.get(i, j);
             }
         }
+    }
+
+    pub fn offset_i(&self) -> u32 {
+        self.pixel_offset.0
+    }
+
+    pub fn offset_j(&self) -> u32 {
+        self.pixel_offset.1
+    }
+
+    pub fn width(&self) -> u32 {
+        self.data.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.data.height
+    }
+
+    /// Access a pixel immutably
+    pub fn get(&self, i: u32, j: u32) -> &[u8; 4] {
+        self.data.get(i, j)
+    }
+
+    /// Access a pixel mutably
+    pub fn get_mut(&mut self, i: u32, j: u32) -> &mut [u8; 4] {
+        self.data.get_mut(i, j)
     }
 }

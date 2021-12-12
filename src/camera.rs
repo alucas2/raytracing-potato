@@ -1,5 +1,6 @@
 use crate::utility::*;
 
+#[derive(Clone)]
 pub struct Camera {
     pub aspect_ratio: Real,
     pub fov: Real,

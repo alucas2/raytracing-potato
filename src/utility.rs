@@ -30,6 +30,7 @@ impl Ray {
 
 // ------------------------------------------- Image sampling -------------------------------------------
 
+#[derive(Clone)]
 pub struct Multisampler {
     pub width: u32,
     pub height: u32,
@@ -78,6 +79,7 @@ pub fn refract(incident: &Vector3, normal: &Vector3, eta: Real) -> Option<Vector
 
 // ------------------------------------------- Transformation -------------------------------------------
 
+#[derive(Clone)]
 pub struct Transformation {
     pub orientation: Matrix3,
     pub position: Vector3,
