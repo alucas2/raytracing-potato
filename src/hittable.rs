@@ -1,16 +1,18 @@
+use nalgebra::Unit;
+
 use crate::utility::*;
 
 // ------------------------------------------- Hittable -------------------------------------------
 
 pub enum Hittable {
-    Sphere {center: Point3, radius: Real, material_id: Id},
+    Sphere {center: Vector3, radius: Real, material_id: Id},
     List(Vec<Hittable>),
 }
 
 pub struct Hit {
     pub t: Real,
-    pub position: Point3,
-    pub normal: Vector3, // The normal is assumed to be a unit vector
+    pub position: Vector3,
+    pub normal: Unit<Vector3>,
     pub material_id: Id,
 }
 
@@ -27,11 +29,11 @@ impl Hittable {
 
 // ------------------------------------------- Hit implementations -------------------------------------------
 
-fn hit_sphere(center: Point3, radius: Real, material_id: Id, ray: Ray, t_min: Real, t_max: Real) -> Option<Hit> {
+fn hit_sphere(center: Vector3, radius: Real, material_id: Id, ray: Ray, t_min: Real, t_max: Real) -> Option<Hit> {
     let to_center = ray.origin - center;
-    let a = ray.direction.magnitude2();
-    let half_b = ray.direction.dot(to_center);
-    let c = to_center.magnitude2() - radius*radius;
+    let a = ray.direction.norm_squared();
+    let half_b = ray.direction.dot(&to_center);
+    let c = to_center.norm_squared() - radius*radius;
     let delta = half_b*half_b - a*c;
     if delta <= 0.0 {
         return None
@@ -47,7 +49,7 @@ fn hit_sphere(center: Point3, radius: Real, material_id: Id, ray: Ray, t_min: Re
     }
 
     let position = ray.at(t);
-    let normal = (position - center).normalize();
+    let normal = Unit::new_normalize(position - center);
     Some(Hit {t, position, normal, material_id})
 }
 

@@ -2,8 +2,10 @@ use crate::utility::*;
 
 pub struct Camera {
     pub aspect_ratio: Real,
-    pub focal_dist: Real,
     pub fov: Real,
+    pub focal_dist: Real,
+    pub lens_radius: Real,
+    pub transformation: Transformation,
 }
 
 // Local camera frame:
@@ -11,22 +13,27 @@ pub struct Camera {
 // Y axis points up
 // Z axis points behind
 impl Camera {
-    pub fn shoot(&self, image_uv: Point2) -> Ray {
+    pub fn shoot(&self, image_uv: Vector2, rng: &mut Randomizer) -> Ray {
         let tan_fov = (0.5 * self.fov).tan();
-
-        // Ray direction in local frame
-        let direction = vec3(
-            (2.0 * image_uv.x - 1.0) * tan_fov * self.aspect_ratio,
-            (2.0 * image_uv.y - 1.0) * tan_fov,
-            -self.focal_dist
-        );
         
         // Ray origin in local frame
-        let origin = point3(0.0, 0.0, 0.0);
+        let origin = self.lens_radius * rng.sample(UnitDisk);
+        let origin = vector![origin.x, origin.y, 0.0];
 
+        // Ray direction in local frame
+        let direction = (vector![
+            (2.0 * image_uv.x - 1.0) * tan_fov * self.focal_dist * self.aspect_ratio,
+            (2.0 * image_uv.y - 1.0) * tan_fov * self.focal_dist,
+            -self.focal_dist
+        ] - origin).normalize();
+        
         // Ray initial attenuation = none
         let attenuation = rgb(1.0, 1.0, 1.0);
 
-        Ray {direction, origin, attenuation}
+        Ray {
+            direction: self.transformation.transform_vector(&direction),
+            origin: self.transformation.transform_point(&origin),
+            attenuation
+        }
     }
 }

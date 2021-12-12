@@ -1,65 +1,45 @@
-use crate::utility::*;
-
 use std::fs::File;
 use std::io::{Read, Write, BufReader, BufWriter};
 use std::error::Error;
 
+// ------------------------------------------- Image -------------------------------------------
+
 #[derive(Default)]
 pub struct RgbaImage {
-    width: usize,
-    height: usize,
+    width: u32,
+    height: u32,
     data: Vec<[u8; 4]>,
 }
 
 impl RgbaImage {
     /// Create an empty image with the given width and height
-    pub fn new(width: usize, height: usize) -> Self {
+    pub fn new(width: u32, height: u32) -> Self {
         RgbaImage {
             width, height,
-            data: vec![[0, 0, 0, 0]; width * height]
+            data: vec![[0, 0, 0, 0]; (width * height) as usize]
         }
     }
 
-    pub fn width(&self) -> usize {
+    pub fn width(&self) -> u32 {
         self.width
     }
 
-    pub fn height(&self) -> usize {
+    pub fn height(&self) -> u32 {
         self.height
     }
 
-    pub fn aspect_ratio(&self) -> Real {
-        self.width as Real / self.height as Real
-    }
-
-    /// Get the sample coordinates of a pixel, in the range [0, 1]
-    pub fn sample(&self, i: usize, j: usize) -> Point2 {
-        point2(
-            i as Real / self.width as Real,
-            j as Real / self.height as Real
-        )
-    }
-
-    /// Get multiple samples coordinates for a pixel, in the range [0, 1]
-    pub fn samples_jitter(&self, i: usize, j: usize, num_samples: usize, rng: &mut ThreadRng) -> Vec<Point2> {
-        (0..num_samples).map(|_| {
-            point2(
-                (i as Real + rng.gen::<Real>()) / self.width as Real,
-                (j as Real + rng.gen::<Real>()) / self.height as Real
-            )
-        }).collect()
-    }
-
     /// Access a pixel immutably
-    pub fn get(&self, i: usize, j: usize) -> &[u8; 4] {
-        &self.data[i + j * self.width]
+    pub fn get(&self, i: u32, j: u32) -> &[u8; 4] {
+        &self.data[(i + j * self.width) as usize]
     }
 
     /// Access a pixel mutably
-    pub fn get_mut(&mut self, i: usize, j: usize) -> &mut [u8; 4] {
-        &mut self.data[i + j * self.width]
+    pub fn get_mut(&mut self, i: u32, j: u32) -> &mut [u8; 4] {
+        &mut self.data[(i + j * self.width) as usize]
     }
 }
+
+// ------------------------------------------- Image loading and saving -------------------------------------------
 
 pub mod tga {
     use std::convert::TryInto;
@@ -111,7 +91,7 @@ pub mod tga {
         let mut image = RgbaImage::default();
         image.width = header.width.into();
         image.height = header.height.into();
-        image.data.resize(image.width * image.height, [0; 4]);
+        image.data.resize((image.width * image.height) as usize, [0; 4]);
         for y in 0..image.height {
             for x in 0..image.width {
                 // To flip vertically or not
@@ -158,14 +138,39 @@ pub mod tga {
         }
         Ok(())
     }
+}
 
-    #[cfg(test)]
-    mod tests {
-        use super::*;
+// ------------------------------------------- Image tiling -------------------------------------------
 
-        #[test]
-        fn tga_header_size() {
-            assert_eq!(std::mem::size_of::<TgaHeader>(), 18)
+pub struct Tile {
+    pub pixel_offset: (u32, u32),
+    pub pixels: RgbaImage,
+}
+
+impl Tile {
+    pub fn new(full_width: u32, full_height: u32, tile_width: u32, tile_height: u32) -> Vec<Self> {
+        let num_tiles_i = (full_width + tile_width - 1) / tile_width;
+        let num_tiles_j = (full_height + tile_height - 1) / tile_height;
+        let mut tiles = Vec::new();
+        
+        for tj in 0..num_tiles_j {
+            for ti in 0..num_tiles_i {
+                let pixel_offset = (ti * tile_width, tj * tile_height);
+                let pixels = RgbaImage::new(
+                    tile_width.min(full_width - pixel_offset.0),
+                    tile_height.min(full_height - pixel_offset.1),
+                );
+                tiles.push(Tile {pixel_offset, pixels}); 
+            }
         }
-    }  
+        tiles
+    }
+
+    pub fn write_to(&self, full_image: &mut RgbaImage) {
+        for j in 0..self.pixels.height {
+            for i in 0..self.pixels.width {
+                *full_image.get_mut(i + self.pixel_offset.0, j + self.pixel_offset.1) = *self.pixels.get(i, j);
+            }
+        }
+    }
 }
