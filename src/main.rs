@@ -1,12 +1,14 @@
 use raytracing2::image::*;
 use raytracing2::utility::*;
-use raytracing2::camera::*;
 use raytracing2::hittable::*;
 use raytracing2::material::*;
 use std::time::Instant;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use indicatif::ProgressBar;
+
+use crate::example_scenes::ExampleScene;
+mod example_scenes;
 
 fn scene_normals(scene: &Hittable, ray: Ray) -> Color {
     if let Some(hit) = scene.hit(ray, 0.0, Real::INFINITY) {
@@ -45,49 +47,9 @@ fn hit_scene(scene: &Hittable, ray: Ray, depth: usize, material_table: &[Materia
 fn main() {
     let (output_width, output_height) = (800, 450);
 
-    let camera = Camera {
-        aspect_ratio: output_width as Real / output_height as Real,
-        fov: FRAC_PI_2,
-        focal_dist: 3.46,
-        lens_radius: 0.1,
-        transformation: Transformation::lookat(
-            &vector![-2.0, 2.0, 1.0],
-            &vector![0.0, 0.0, -1.0],
-            &vector![0.0, 1.0, 0.0]
-        ),
-    };
-
-    // Table of materials
-    let material_table = vec![
-        Material::Lambert {albedo: rgb(0.8, 0.8, 0.0)},
-        Material::Lambert {albedo: rgb(0.1, 0.2, 0.5)},
-        Material::Dielectric {refraction_index: 1.5},
-        Material::Metal {albedo: rgb(0.8, 0.6, 0.2), fuzziness: 0.0},
-    ];
-
-    // List of object of the scene
-    let scene = Hittable::List(vec![
-        Hittable::Sphere {
-            center: vector![0.0, 0.0, -1.0],
-            radius: 0.5,
-            material_id: 1,
-        },
-        Hittable::Sphere {
-            center: vector![0.0, -100.5, -1.0],
-            radius: 100.0,
-            material_id: 0,
-        },
-        Hittable::Sphere {
-            center: vector![-1.0, 0.0, -1.0],
-            radius: 0.5,
-            material_id: 2,
-        },
-        Hittable::Sphere {
-            center: vector![1.0, 0.0, -1.0],
-            radius: 0.5,
-            material_id: 3,
-        }
-    ]);
+    // Load the scene
+    let mut scene = example_scenes::three_balls();
+    scene.camera.aspect_ratio = output_width as Real / output_height as Real;
 
     // Renderer parameters
     let max_bounce = 10;
@@ -113,12 +75,11 @@ fn main() {
         let complete_jobs = Arc::clone(&complete_jobs);
         let mut rng = Randomizer::from_entropy();
         let progress_bar = progress_bar.clone();
-        let scene = scene.clone();
-        let material_table = material_table.clone();
         let sampler = sampler.clone();
-        let camera = camera.clone();
+        let scene = scene.clone();
 
         thread::spawn(move || {
+            let ExampleScene {camera, material_table, root} = scene;
             loop {
                 let job = {
                     // Momentarily lock the job queue to pop a new job
@@ -131,7 +92,7 @@ fn main() {
                             let mut color = rgb(0.0, 0.0, 0.0);
                             for s in sampler.samples_jitter(ti + tile.offset_i(), tj + tile.offset_j(), &mut rng) {
                                 let ray = camera.shoot(s, &mut rng);
-                                color += hit_scene(&scene, ray, max_bounce, &material_table, &mut rng);
+                                color += hit_scene(&root, ray, max_bounce, &material_table, &mut rng);
                             }
                             *tile.get_mut(ti, tj) = to_srgb_u8(color / sampler.num_samples as Real);
                         }
