@@ -7,34 +7,25 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use indicatif::ProgressBar;
 
-use crate::example_scenes::ExampleScene;
 mod example_scenes;
 
-fn scene_normals(scene: &Hittable, ray: Ray) -> Color {
-    if let Some(hit) = scene.hit(ray, 0.0, Real::INFINITY) {
-        rgb(0.5 * hit.normal.x + 0.5, 0.5 * hit.normal.y + 0.5, 0.5 * hit.normal.z + 0.5)
-    } else {
-        rgb(0.0, 0.0, 0.0)
-    }
-}
-
-fn sky_background(ray: Ray) -> Color {
+fn sky_background(ray: &Ray) -> Color {
     let unit_direction = ray.direction.normalize();
     let t = 0.5 * (unit_direction.y + 1.0);
-    let background_color = (1.0 - t) * rgb(1.0, 1.0, 1.0) + t * rgb(0.5, 0.7, 1.0);
-    ray.attenuation.component_mul(&background_color)
+    (1.0 - t) * rgb(1.0, 1.0, 1.0) + t * rgb(0.5, 0.7, 1.0)
 }
 
-fn hit_scene(scene: &Hittable, ray: Ray, depth: usize, material_table: &[Material], rng: &mut Randomizer) -> Color {
+fn hit_scene(scene: &Hittable, ray: &Ray, depth: usize, material_table: &[Material], rng: &mut Randomizer) -> Color {
     if depth == 0 {
         // This ray did not reach any light
         return rgb(0.0, 0.0, 0.0)
     }
 
-    if let Some(hit) = scene.hit(ray, 1e-3, Real::INFINITY) {
-        if let Some(scatter) = material_table.get(hit.material_id as usize).unwrap().scatter(ray, hit, rng) {
+    if let Some(hit) = scene.hit(ray) {
+        let material = material_table.get(hit.material_id as usize).unwrap_or(&Material::Missing);
+        if let Some((attenuation, scatter)) = material.scatter(ray, &hit, rng) {
             // Scatter
-            hit_scene(scene, scatter, depth-1, material_table, rng)
+            attenuation.component_mul(&hit_scene(scene, &scatter, depth-1, material_table, rng))
         } else {
             // Absorb
             rgb(0.0, 0.0, 0.0)
@@ -45,41 +36,44 @@ fn hit_scene(scene: &Hittable, ray: Ray, depth: usize, material_table: &[Materia
 }
 
 fn main() {
-    let (output_width, output_height) = (800, 450);
+    let (output_width, output_height) = (1280, 720);
 
     // Load the scene
-    let mut scene = example_scenes::three_balls();
+    // let mut scene = example_scenes::three_balls()
+    // let mut scene = example_scenes::more_balls();
+    let mut scene = example_scenes::more_balls_optimized();
     scene.camera.aspect_ratio = output_width as Real / output_height as Real;
 
     // Renderer parameters
-    let max_bounce = 10;
-    let tile_size = 64;
+    let max_bounce = 8;
+    let tile_size = 32;
     let num_workers = 4;
 
     let sampler = Multisampler {
         width: output_width,
         height: output_height,
-        num_samples: 128,
+        num_samples: 1,
     };
     
     let job_queue = Tile::generate(output_width, output_height, tile_size, tile_size);
     let progress_bar = ProgressBar::new(job_queue.len() as _);
     
+    // Put the things into arcs
+    let scene = Arc::new(scene);
     let job_queue = Arc::new(Mutex::new(job_queue));
     let complete_jobs = Arc::new(Mutex::new(Vec::new()));
-    let t0 = Instant::now();
     
     // Start the rendering workers
+    let t0 = Instant::now();
     let workers: Vec<_> = (0..num_workers).map(|_| {
         let job_queue = Arc::clone(&job_queue);
         let complete_jobs = Arc::clone(&complete_jobs);
-        let mut rng = Randomizer::from_entropy();
         let progress_bar = progress_bar.clone();
         let sampler = sampler.clone();
-        let scene = scene.clone();
+        let scene = Arc::clone(&scene);
+        let mut rng = Randomizer::from_entropy();
 
         thread::spawn(move || {
-            let ExampleScene {camera, material_table, root} = scene;
             loop {
                 let job = {
                     // Momentarily lock the job queue to pop a new job
@@ -91,8 +85,8 @@ fn main() {
                         for ti in 0..tile.width() {
                             let mut color = rgb(0.0, 0.0, 0.0);
                             for s in sampler.samples_jitter(ti + tile.offset_i(), tj + tile.offset_j(), &mut rng) {
-                                let ray = camera.shoot(s, &mut rng);
-                                color += hit_scene(&root, ray, max_bounce, &material_table, &mut rng);
+                                let ray = scene.camera.shoot(s, &mut rng);
+                                color += hit_scene(&scene.root, &ray, max_bounce, &scene.material_table, &mut rng);
                             }
                             *tile.get_mut(ti, tj) = to_srgb_u8(color / sampler.num_samples as Real);
                         }

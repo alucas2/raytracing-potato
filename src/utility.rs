@@ -1,36 +1,72 @@
+// In this file:
+// 1. Types and constants
+// 2. Ray
+// 3. Image sampling
+// 4. Specialized math
+// 5. Bounding boxes
+// 6. Transformations
+// 7. Color
+// 8. Random distributions
+
+// ------------------------------------------- Types and constants -------------------------------------------
+
 pub type Real = f64;
-pub type Vector2 = nalgebra::Vector2<Real>;
-pub type Vector3 = nalgebra::Vector3<Real>;
-pub type Matrix3 = nalgebra::Matrix3<Real>;
+pub type Rvec2 = nalgebra::Vector2<Real>;
+pub type Rvec3 = nalgebra::Vector3<Real>;
+pub type Bvec3 = nalgebra::Vector3<bool>;
+pub type Rmat3 = nalgebra::Matrix3<Real>;
 pub type Id = u32;
 pub type Randomizer = rand::rngs::StdRng;
 
+// I do not use naglebra's fancy wrappers like Point and Unit because:
+// 1. They are annoying to work with
+// 2. I trust myself (a bit)
+
+pub use nalgebra::{vector, matrix};
 pub use rand::{prelude::*, Rng};
 pub use std::f64::consts::*;
-pub use nalgebra::{vector, matrix};
+pub use std::f64::INFINITY;
+pub const RAY_EPSILON: Real = 1e-3;
 
 // ------------------------------------------- Ray -------------------------------------------
 
 /// A line with equation a*t + b
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Ray {
     /// Ray origin
-    pub origin: Vector3,
+    pub origin: Rvec3,
     /// Ray direction as a unit vector
-    pub direction: Vector3,
-    /// Attenuation from the previous bounces
-    pub attenuation: Color,
+    pub direction: Rvec3,
+    /// Closer extremity
+    pub t_min: Real,
+    /// Further extremity 
+    pub t_max: Real,
+}
+
+/// A ray with some additional cached information
+#[derive(Debug, Clone)]
+pub struct RayExpanded {
+    pub inner: Ray,
+    pub inv_direction: Rvec3,
 }
 
 impl Ray {
-    pub fn at(&self, t: Real) -> Vector3 {
+    pub fn at(&self, t: Real) -> Rvec3 {
         self.origin + t * self.direction
+    }
+
+    pub fn expand(self) -> RayExpanded {
+        let inv_direction = vector![1.0 / self.direction.x, 1.0 / self.direction.y, 1.0 / self.direction.z];
+        RayExpanded {
+            inner: self,
+            inv_direction,
+        }
     }
 }
 
 // ------------------------------------------- Image sampling -------------------------------------------
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Multisampler {
     pub width: u32,
     pub height: u32,
@@ -39,7 +75,7 @@ pub struct Multisampler {
 
 impl Multisampler {
     /// Get the sample coordinates of a pixel, in the range [0, 1]
-    pub fn sample(&self, i: u32, j: u32) -> Vector2 {
+    pub fn sample(&self, i: u32, j: u32) -> Rvec2 {
         vector![
             i as Real / self.width as Real,
             j as Real / self.height as Real
@@ -47,7 +83,7 @@ impl Multisampler {
     }
 
     /// Get multiple samples coordinates for a pixel, in the range [0, 1]
-    pub fn samples_jitter(&self, i: u32, j: u32, rng: & mut Randomizer) -> impl Iterator<Item=Vector2> + '_ {
+    pub fn samples_jitter(&self, i: u32, j: u32, rng: &mut Randomizer) -> impl Iterator<Item=Rvec2> + '_ {
         let mut rng = rng.clone();
         (0..self.num_samples).map(move |_| {
             vector![
@@ -58,16 +94,15 @@ impl Multisampler {
     }
 }
 
-
 // ------------------------------------------- Some math -------------------------------------------
 
 /// Normal must be a unit vector, then it returns a vector of the same length as incident
-pub fn reflect(incident: &Vector3, normal: &Vector3) -> Vector3 {
+pub fn reflect(incident: &Rvec3, normal: &Rvec3) -> Rvec3 {
     incident - 2.0 * incident.dot(&normal) * normal
 }
 
 /// Normal and incident must be unit vectors, then it returns a unit vector
-pub fn refract(incident: &Vector3, normal: &Vector3, eta: Real) -> Option<Vector3> {
+pub fn refract(incident: &Rvec3, normal: &Rvec3, eta: Real) -> Option<Rvec3> {
     let cos_theta = normal.dot(&incident);
     let k = 1.0 - eta * eta * (1.0 - cos_theta * cos_theta);
     if k < 0.0 {
@@ -77,26 +112,61 @@ pub fn refract(incident: &Vector3, normal: &Vector3, eta: Real) -> Option<Vector
     }
 }
 
+// ------------------------------------------- Bounding boxes -------------------------------------------
+
+#[derive(Debug, Clone, Default)]
+pub struct AABB {
+    pub min: Rvec3,
+    pub max: Rvec3,
+}
+
+impl AABB {
+    pub fn union(&self, other: &AABB) -> AABB {
+        AABB {
+            min: vector![self.min.x.min(other.min.x), self.min.y.min(other.min.y), self.min.z.min(other.min.z)],
+            max: vector![self.max.x.max(other.max.x), self.max.y.max(other.max.y), self.max.z.max(other.max.z)],
+        }
+    }
+
+    pub fn collide(&self, ray: &RayExpanded) -> bool {
+        // This is a hot function, optimizations are welcome
+        let t0 = (self.min - ray.inner.origin).component_mul(&ray.inv_direction);
+        let t1 = (self.max - ray.inner.origin).component_mul(&ray.inv_direction);
+        
+        let t_min = ray.inner.t_min
+            .max(t0.x.min(t1.x))
+            .max(t0.y.min(t1.y))
+            .max(t0.z.min(t1.z));
+        
+        let t_max = ray.inner.t_max
+            .min(t0.x.max(t1.x))
+            .min(t0.y.max(t1.y))
+            .min(t0.z.max(t1.z));
+
+        t_max > t_min
+    }
+}
+
 // ------------------------------------------- Transformation -------------------------------------------
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Transformation {
-    pub orientation: Matrix3,
-    pub position: Vector3,
+    pub orientation: Rmat3,
+    pub position: Rvec3,
 }
 
 impl Transformation {
     pub fn identity() -> Self {
-        let orientation = Matrix3::identity();
-        let position = Vector3::zeros();
+        let orientation = Rmat3::identity();
+        let position = Rvec3::zeros();
         Transformation {orientation, position}
     }
 
-    pub fn lookat(position: &Vector3, target: &Vector3, up: &Vector3) -> Self {
+    pub fn lookat(position: &Rvec3, target: &Rvec3, up: &Rvec3) -> Self {
         let z = (position - target).normalize();
         let x = up.cross(&z);
         let y = z.cross(&x);
-        Transformation {orientation: Matrix3::from_columns(&[x, y, z]), position: *position}
+        Transformation {orientation: Rmat3::from_columns(&[x, y, z]), position: *position}
     }
 
     pub fn inverse(&self) -> Self {
@@ -105,11 +175,11 @@ impl Transformation {
         Transformation {orientation: inv_orientation, position: inv_position}
     }
 
-    pub fn transform_vector(&self, vector: &Vector3) -> Vector3 {
+    pub fn transform_vector(&self, vector: &Rvec3) -> Rvec3 {
         self.orientation * vector
     }
 
-    pub fn transform_point(&self, point: &Vector3) -> Vector3 {
+    pub fn transform_point(&self, point: &Rvec3) -> Rvec3 {
         self.orientation * point + self.position
     }
 }
@@ -128,13 +198,22 @@ pub fn to_srgb_u8(color: Color) -> [u8; 4] {
 
 // ------------------------------------------- Randomness -------------------------------------------
 
-use rand::{distributions::Distribution};
+use rand::distributions::Distribution;
+
+/// A uniform distribution inside a range
+pub struct ClosedRange(pub Real, pub Real);
+
+impl Distribution<Real> for ClosedRange {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Real {
+        self.0 + rng.gen::<Real>() * (self.1 - self.0)
+    }
+}
 
 /// A uniform distribution of vectors inside the unit disk
 pub struct UnitDisk;
 
-impl Distribution<Vector2> for UnitDisk {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Vector2 {
+impl Distribution<Rvec2> for UnitDisk {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Rvec2 {
         loop {
             let v = vector![
                 2.0 * rng.gen::<Real>() - 1.0,
@@ -152,8 +231,8 @@ impl Distribution<Vector2> for UnitDisk {
 /// A uniform distribution of vectors inside the unit ball
 pub struct UnitBall;
 
-impl Distribution<Vector3> for UnitBall {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Vector3 {
+impl Distribution<Rvec3> for UnitBall {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Rvec3 {
         loop {
             let v = vector![
                 2.0 * rng.gen::<Real>() - 1.0,
@@ -171,8 +250,8 @@ impl Distribution<Vector3> for UnitBall {
 /// A uniform distribution of vectors on the unit sphere
 pub struct UnitSphere;
 
-impl Distribution<Vector3> for UnitSphere {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Vector3 {
+impl Distribution<Rvec3> for UnitSphere {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Rvec3 {
         loop {
             let v = vector![
                 2.0 * rng.gen::<Real>() - 1.0,

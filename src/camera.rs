@@ -1,6 +1,6 @@
 use crate::utility::*;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Camera {
     pub aspect_ratio: Real,
     pub fov: Real,
@@ -14,7 +14,7 @@ pub struct Camera {
 // Y axis points up
 // Z axis points behind
 impl Camera {
-    pub fn shoot(&self, image_uv: Vector2, rng: &mut Randomizer) -> Ray {
+    pub fn shoot(&self, image_uv: Rvec2, rng: &mut Randomizer) -> Ray {
         let tan_fov = (0.5 * self.fov).tan();
         
         // Ray origin in local frame
@@ -28,13 +28,11 @@ impl Camera {
             -self.focal_dist
         ] - origin).normalize();
         
-        // Ray initial attenuation = none
-        let attenuation = rgb(1.0, 1.0, 1.0);
-
         Ray {
             direction: self.transformation.transform_vector(&direction),
             origin: self.transformation.transform_point(&origin),
-            attenuation
+            t_min: RAY_EPSILON,
+            t_max: INFINITY,
         }
     }
 }

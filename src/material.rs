@@ -2,16 +2,18 @@ use crate::{utility::*, hittable::Hit};
 
 // ------------------------------------------- Material -------------------------------------------
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Material {
+    Missing,
     Lambert {albedo: Color},
     Metal {albedo: Color, fuzziness: Real},
     Dielectric {refraction_index: Real},
 }
 
 impl Material {
-    pub fn scatter(&self, incident: Ray, hit: Hit, rng: &mut Randomizer) -> Option<Ray> {
+    pub fn scatter(&self, incident: &Ray, hit: &Hit, rng: &mut Randomizer) -> Option<(Color, Ray)> {
         match self {
+            Self::Missing => None,
             Self::Lambert {albedo} => scatter_lambert(incident, hit, *albedo, rng),
             Self::Metal {albedo, fuzziness} => scatter_metal(incident, hit, *albedo, *fuzziness, rng),
             Self::Dielectric {refraction_index} => scatter_dielectric(incident, hit, *refraction_index, rng),
@@ -21,23 +23,24 @@ impl Material {
 
 // ------------------------------------------- Material implementations -------------------------------------------
 
-fn scatter_lambert(incident: Ray, hit: Hit, albedo: Color, rng: &mut Randomizer) -> Option<Ray> {
+fn scatter_lambert(incident: &Ray, hit: &Hit, albedo: Color, rng: &mut Randomizer) -> Option<(Color, Ray)> {
     if hit.normal.dot(&incident.direction) > 0.0 {
         return None
     }
     
     // Compute the scatter direction with lambertian distribution
-    let scatter_dir = (hit.normal.into_inner() + rng.sample(UnitSphere)).normalize();
+    let scatter_dir = (hit.normal + rng.sample(UnitSphere)).normalize();
     
     let scattered = Ray {
         direction: scatter_dir,
         origin: hit.position,
-        attenuation: incident.attenuation.component_mul(&albedo)
+        t_min: RAY_EPSILON,
+        t_max: INFINITY,
     };
-    Some(scattered)
+    Some((albedo, scattered))
 }
 
-fn scatter_metal(incident: Ray, hit: Hit, albedo: Color, fuzziness: Real, rng: &mut Randomizer) -> Option<Ray> {
+fn scatter_metal(incident: &Ray, hit: &Hit, albedo: Color, fuzziness: Real, rng: &mut Randomizer) -> Option<(Color, Ray)> {
     if hit.normal.dot(&incident.direction) > 0.0 {
         return None
     }
@@ -53,12 +56,13 @@ fn scatter_metal(incident: Ray, hit: Hit, albedo: Color, fuzziness: Real, rng: &
     let reflected = Ray {
         direction: reflect_dir,
         origin: hit.position,
-        attenuation: incident.attenuation.component_mul(&albedo)
+        t_min: RAY_EPSILON,
+        t_max: INFINITY,
     };
-    Some(reflected)
+    Some((albedo, reflected))
 }
 
-fn scatter_dielectric(incident: Ray, hit: Hit, refraction_index: Real, rng: &mut Randomizer) -> Option<Ray> {
+fn scatter_dielectric(incident: &Ray, hit: &Hit, refraction_index: Real, rng: &mut Randomizer) -> Option<(Color, Ray)> {
     let (eta, normal) = if hit.normal.dot(&incident.direction) > 0.0 {
         // Interior
         (refraction_index, -hit.normal)
@@ -80,7 +84,8 @@ fn scatter_dielectric(incident: Ray, hit: Hit, refraction_index: Real, rng: &mut
     let bounce = Ray {
         direction: bounce_direction,
         origin: hit.position,
-        attenuation: incident.attenuation
+        t_min: RAY_EPSILON,
+        t_max: INFINITY,
     };
-    Some(bounce)
+    Some((rgb(1.0, 1.0, 1.0), bounce))
 }
