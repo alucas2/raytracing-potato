@@ -5,23 +5,15 @@ use crate::bvh::Bvh;
 
 #[derive(Clone)]
 pub enum Hittable {
-    Sphere {center: Rvec3, radius: Real, material_id: MaterialId},
+    Sphere {center: Rvec3, radius: Real, material: MaterialId},
     List(Vec<Hittable>),
     Bvh(Bvh),
-}
-
-pub struct Hit {
-    pub t: Real,
-    pub position: Rvec3,
-    pub normal: Rvec3, // <-- Keep this vector normalized
-    pub uv: Rvec2,
-    pub material_id: MaterialId,
 }
 
 impl Hittable {
     pub fn hit(&self, ray: &Ray) -> Option<Hit> {
         match self {
-            Self::Sphere {center, radius, material_id} => hit_sphere(center, *radius, *material_id, ray),
+            Self::Sphere {center, radius, material} => hit_sphere(center, *radius, *material, ray),
             Self::List(list) => hit_list(list, ray),
             Self::Bvh(bvh) => bvh.hit(ray),
         }
@@ -38,7 +30,7 @@ impl Hittable {
 
 // ------------------------------------------- Hit implementations -------------------------------------------
 
-fn hit_sphere(center: &Rvec3, radius: Real, material_id: MaterialId, ray: &Ray) -> Option<Hit> {
+fn hit_sphere(center: &Rvec3, radius: Real, material: MaterialId, ray: &Ray) -> Option<Hit> {
     let to_center = ray.origin - center;
     let a = ray.direction.norm_squared();
     let half_b = ray.direction.dot(&to_center);
@@ -62,7 +54,7 @@ fn hit_sphere(center: &Rvec3, radius: Real, material_id: MaterialId, ray: &Ray) 
     let normal = (position - center).normalize();
     let uv = vector![normal.y.asin() / PI + 0.5, 0.5 - normal.z.atan2(normal.x) / TAU];
 
-    Some(Hit {t, position, normal, uv, material_id})
+    Some(Hit {t, position, normal, uv, material})
 }
 
 fn hit_list(list: &[Hittable], ray: &Ray) -> Option<Hit> {

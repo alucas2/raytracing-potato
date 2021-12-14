@@ -1,4 +1,13 @@
 use crate::utility::*;
+use crate::hittable::Hittable;
+use crate::material::Material;
+use crate::texture::Texture;
+
+/// Global data to be shared by the rendering workers.
+pub struct SceneData {
+    pub material_table: Vec<Material>,
+    pub texture_table: Vec<Texture>,
+}
 
 #[derive(Debug, Clone)]
 pub struct Camera {
@@ -34,5 +43,30 @@ impl Camera {
             t_min: RAY_EPSILON,
             t_max: INFINITY,
         }
+    }
+}
+
+// TODO: could the background be a material too?
+pub fn hit_scene<Background>(scene: &Hittable, ray: &Ray, depth: usize, scene_data: &SceneData, rng: &mut Randomizer,
+    background: Background)
+    -> Color
+    where Background: Fn(&Ray) -> Color
+{
+    if depth == 0 {
+        // This ray did not reach any light
+        return rgb(0.0, 0.0, 0.0)
+    }
+
+    if let Some(hit) = scene.hit(ray) {
+        let material = &scene_data.material_table[hit.material.to_index()];
+        if let Some((attenuation, scatter)) = material.scatter(ray, &hit, scene_data, rng) {
+            // Scatter
+            attenuation.component_mul(&hit_scene(scene, &scatter, depth-1, scene_data, rng, background))
+        } else {
+            // Absorb
+            rgb(0.0, 0.0, 0.0)
+        }
+    } else {
+        background(ray)
     }
 }

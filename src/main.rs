@@ -1,7 +1,6 @@
 use raytracing2::image::*;
 use raytracing2::utility::*;
-use raytracing2::hittable::*;
-use raytracing2::material::*;
+use raytracing2::render::hit_scene;
 use std::time::Instant;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -15,31 +14,12 @@ fn sky_background(ray: &Ray) -> Color {
     (1.0 - t) * rgb(1.0, 1.0, 1.0) + t * rgb(0.5, 0.7, 1.0)
 }
 
-fn hit_scene(scene: &Hittable, ray: &Ray, depth: usize, scene_data: &SceneData, rng: &mut Randomizer) -> Color {
-    if depth == 0 {
-        // This ray did not reach any light
-        return rgb(0.0, 0.0, 0.0)
-    }
-
-    if let Some(hit) = scene.hit(ray) {
-        let material = &scene_data.material_table[hit.material_id.to_index()];
-        if let Some((attenuation, scatter)) = material.scatter(ray, &hit, scene_data, rng) {
-            // Scatter
-            attenuation.component_mul(&hit_scene(scene, &scatter, depth-1, scene_data, rng))
-        } else {
-            // Absorb
-            rgb(0.0, 0.0, 0.0)
-        }
-    } else {
-        sky_background(ray)
-    }
-}
-
 fn main() {
     let (output_width, output_height) = (1280, 720);
 
     // Load the scene
-    let mut scene = example_scenes::more_balls_optimized();
+    let mut scene = example_scenes::two_balls();
+    // let mut scene = example_scenes::more_balls_optimized();
     scene.camera.aspect_ratio = output_width as Real / output_height as Real;
 
     // Renderer parameters
@@ -50,7 +30,7 @@ fn main() {
     let sampler = Multisampler {
         width: output_width,
         height: output_height,
-        num_samples: 1,
+        num_samples: 16,
     };
     
     let job_queue = Tile::generate(output_width, output_height, tile_size, tile_size);
@@ -79,13 +59,19 @@ fn main() {
                 };
 
                 if let Some(mut tile) = job {
+                    // Walk on each pixel of the tile
                     for tj in 0..tile.height() {
                         for ti in 0..tile.width() {
+                            // Sample the scene multiple times
                             let mut color = rgb(0.0, 0.0, 0.0);
-                            for s in sampler.make_uv_jitter(ti + tile.offset_i(), tj + tile.offset_j(), &mut rng) {
+                            let samples = sampler.make_uv_jitter(ti + tile.offset_i(), tj + tile.offset_j(), &mut rng);
+                            for s in samples {
                                 let ray = scene.camera.shoot(s, &mut rng);
-                                color += hit_scene(&scene.root, &ray, max_bounce, &scene.scene_data, &mut rng);
+                                color += hit_scene(
+                                    &scene.root, &ray, max_bounce, &scene.scene_data, &mut rng, sky_background
+                                );
                             }
+                            // The final color is the average of the samples
                             *tile.get_mut(ti, tj) = to_srgb_u8(color / sampler.num_samples as Real);
                         }
                     }

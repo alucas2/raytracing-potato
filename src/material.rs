@@ -1,4 +1,5 @@
-use crate::{utility::*, hittable::Hit};
+use crate::utility::*;
+use crate::render::SceneData;
 
 // ------------------------------------------- Material -------------------------------------------
 
@@ -16,15 +17,12 @@ impl Material {
     {
         match self {
             Self::Missing => None,
-            Self::Lambert {albedo} => {
-                scatter_lambert(incident, hit, scene_data, rng, *albedo)
-            },
-            Self::Metal {albedo, fuzziness} => {
-                scatter_metal(incident, hit, *albedo, *fuzziness, rng)
-            },
-            Self::Dielectric {refraction_index} => {
-                scatter_dielectric(incident, hit, *refraction_index, rng)
-            },
+            Self::Lambert {albedo}
+                => scatter_lambert(incident, hit, scene_data, rng, *albedo),
+            Self::Metal {albedo, fuzziness}
+                => scatter_metal(incident, hit, scene_data, rng, *albedo, *fuzziness),
+            Self::Dielectric {refraction_index}
+                => scatter_dielectric(incident, hit, scene_data, rng, *refraction_index),
         }
     }
 }
@@ -53,7 +51,9 @@ fn scatter_lambert(incident: &Ray, hit: &Hit, scene_data: &SceneData, rng: &mut 
     Some((albedo, scattered))
 }
 
-fn scatter_metal(incident: &Ray, hit: &Hit, albedo: Color, fuzziness: Real, rng: &mut Randomizer) -> Option<(Color, Ray)> {
+fn scatter_metal(incident: &Ray, hit: &Hit, _scene_data: &SceneData, rng: &mut Randomizer, albedo: Color,
+    fuzziness: Real) -> Option<(Color, Ray)>
+{
     if hit.normal.dot(&incident.direction) > 0.0 {
         return None
     }
@@ -75,7 +75,9 @@ fn scatter_metal(incident: &Ray, hit: &Hit, albedo: Color, fuzziness: Real, rng:
     Some((albedo, reflected))
 }
 
-fn scatter_dielectric(incident: &Ray, hit: &Hit, refraction_index: Real, rng: &mut Randomizer) -> Option<(Color, Ray)> {
+fn scatter_dielectric(incident: &Ray, hit: &Hit, _scene_data: &SceneData, rng: &mut Randomizer, refraction_index: Real)
+    -> Option<(Color, Ray)>
+{
     let (eta, normal) = if hit.normal.dot(&incident.direction) > 0.0 {
         // Interior
         (refraction_index, -hit.normal)

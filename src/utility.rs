@@ -12,7 +12,8 @@ In this file:
 
 // ------------------------------------------- Types and constants -------------------------------------------
 
-pub type Real = f64;
+pub type Real = f64; // <-- Choose here between f64 and f32
+pub use std::f64::{consts::*, INFINITY}; // <-- and here
 pub type Rvec2 = nalgebra::Vector2<Real>;
 pub type Rvec3 = nalgebra::Vector3<Real>;
 pub type Bvec3 = nalgebra::Vector3<bool>;
@@ -28,10 +29,11 @@ I do not use naglebra's fancy wrappers like Point and Unit because:
 pub use nalgebra::{vector, matrix};
 pub use rand::{prelude::*, Rng};
 use rand::distributions::Distribution;
-pub use std::f64::consts::*;
-pub use std::f64::INFINITY;
+
+/// Nudge the start of the ray to avoid self-intersection
 pub const RAY_EPSILON: Real = 1e-3;
 
+/// An index into the material table
 #[derive(Debug, Clone, Copy)]
 pub struct MaterialId(pub u32);
 
@@ -39,6 +41,7 @@ impl MaterialId {
     pub fn to_index(self) -> usize {self.0 as usize}
 }
 
+/// An index into the texture table
 #[derive(Debug, Clone, Copy)]
 pub struct TextureId(pub u32);
 
@@ -46,17 +49,9 @@ impl TextureId {
     pub fn to_index(self) -> usize {self.0 as usize}
 }
 
-use crate::material::Material;
-use crate::texture::Texture;
-
-pub struct SceneData {
-    pub material_table: Vec<Material>,
-    pub texture_table: Vec<Texture>,
-}
-
 // ------------------------------------------- Ray -------------------------------------------
 
-/// A line with equation a*t + b
+/// A segment with equation b+a*t, with t ranging from t_min to t_max
 #[derive(Debug, Clone)]
 pub struct Ray {
     pub origin: Rvec3,
@@ -70,6 +65,16 @@ pub struct Ray {
 pub struct RayExpanded {
     pub inner: Ray,
     pub inv_direction: Rvec3,
+}
+
+/// A collision between a ray and an object
+#[derive(Debug, Clone)]
+pub struct Hit {
+    pub t: Real,
+    pub position: Rvec3,
+    pub normal: Rvec3, // <-- Keep this vector normalized
+    pub uv: Rvec2,
+    pub material: MaterialId,
 }
 
 impl Ray {
