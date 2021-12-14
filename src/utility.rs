@@ -1,12 +1,14 @@
-// In this file:
-// 1. Types and constants
-// 2. Ray
-// 3. Image sampling
-// 4. Specialized math
-// 5. Bounding boxes
-// 6. Transformations
-// 7. Color
-// 8. Random distributions
+/*
+In this file:
+- Types and constants
+- Ray
+- Image sampling
+- Specialized math
+- Bounding boxes
+- Transformations
+- Color
+- Random distributions
+*/
 
 // ------------------------------------------- Types and constants -------------------------------------------
 
@@ -15,31 +17,51 @@ pub type Rvec2 = nalgebra::Vector2<Real>;
 pub type Rvec3 = nalgebra::Vector3<Real>;
 pub type Bvec3 = nalgebra::Vector3<bool>;
 pub type Rmat3 = nalgebra::Matrix3<Real>;
-pub type Id = u32;
 pub type Randomizer = rand::rngs::StdRng;
 
-// I do not use naglebra's fancy wrappers like Point and Unit because:
-// 1. They are annoying to work with
-// 2. I trust myself (a bit)
+/*
+I do not use naglebra's fancy wrappers like Point and Unit because:
+1. They are annoying to work with
+2. I trust myself (a bit)
+*/
 
 pub use nalgebra::{vector, matrix};
 pub use rand::{prelude::*, Rng};
+use rand::distributions::Distribution;
 pub use std::f64::consts::*;
 pub use std::f64::INFINITY;
 pub const RAY_EPSILON: Real = 1e-3;
+
+#[derive(Debug, Clone, Copy)]
+pub struct MaterialId(pub u32);
+
+impl MaterialId {
+    pub fn to_index(self) -> usize {self.0 as usize}
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct TextureId(pub u32);
+
+impl TextureId {
+    pub fn to_index(self) -> usize {self.0 as usize}
+}
+
+use crate::material::Material;
+use crate::texture::Texture;
+
+pub struct SceneData {
+    pub material_table: Vec<Material>,
+    pub texture_table: Vec<Texture>,
+}
 
 // ------------------------------------------- Ray -------------------------------------------
 
 /// A line with equation a*t + b
 #[derive(Debug, Clone)]
 pub struct Ray {
-    /// Ray origin
     pub origin: Rvec3,
-    /// Ray direction as a unit vector
-    pub direction: Rvec3,
-    /// Closer extremity
+    pub direction: Rvec3, // <-- Keep this vector normalized
     pub t_min: Real,
-    /// Further extremity 
     pub t_max: Real,
 }
 
@@ -75,7 +97,7 @@ pub struct Multisampler {
 
 impl Multisampler {
     /// Get the sample coordinates of a pixel, in the range [0, 1]
-    pub fn sample(&self, i: u32, j: u32) -> Rvec2 {
+    pub fn make_uv(&self, i: u32, j: u32) -> Rvec2 {
         vector![
             i as Real / self.width as Real,
             j as Real / self.height as Real
@@ -83,7 +105,7 @@ impl Multisampler {
     }
 
     /// Get multiple samples coordinates for a pixel, in the range [0, 1]
-    pub fn samples_jitter(&self, i: u32, j: u32, rng: &mut Randomizer) -> impl Iterator<Item=Rvec2> + '_ {
+    pub fn make_uv_jitter(&self, i: u32, j: u32, rng: &mut Randomizer) -> impl Iterator<Item=Rvec2> + '_ {
         let mut rng = rng.clone();
         (0..self.num_samples).map(move |_| {
             vector![
@@ -130,6 +152,7 @@ impl AABB {
 
     pub fn collide(&self, ray: &RayExpanded) -> bool {
         // This is a hot function, optimizations are welcome
+        // https://tavianator.com/2011/ray_box.html
         let t0 = (self.min - ray.inner.origin).component_mul(&ray.inv_direction);
         let t1 = (self.max - ray.inner.origin).component_mul(&ray.inv_direction);
         
@@ -198,8 +221,6 @@ pub fn to_srgb_u8(color: Color) -> [u8; 4] {
 
 // ------------------------------------------- Randomness -------------------------------------------
 
-use rand::distributions::Distribution;
-
 /// A uniform distribution inside a range
 pub struct ClosedRange(pub Real, pub Real);
 
@@ -226,7 +247,6 @@ impl Distribution<Rvec2> for UnitDisk {
         }
     }
 }
-
 
 /// A uniform distribution of vectors inside the unit ball
 pub struct UnitBall;

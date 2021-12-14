@@ -15,17 +15,17 @@ fn sky_background(ray: &Ray) -> Color {
     (1.0 - t) * rgb(1.0, 1.0, 1.0) + t * rgb(0.5, 0.7, 1.0)
 }
 
-fn hit_scene(scene: &Hittable, ray: &Ray, depth: usize, material_table: &[Material], rng: &mut Randomizer) -> Color {
+fn hit_scene(scene: &Hittable, ray: &Ray, depth: usize, scene_data: &SceneData, rng: &mut Randomizer) -> Color {
     if depth == 0 {
         // This ray did not reach any light
         return rgb(0.0, 0.0, 0.0)
     }
 
     if let Some(hit) = scene.hit(ray) {
-        let material = material_table.get(hit.material_id as usize).unwrap_or(&Material::Missing);
-        if let Some((attenuation, scatter)) = material.scatter(ray, &hit, rng) {
+        let material = &scene_data.material_table[hit.material_id.to_index()];
+        if let Some((attenuation, scatter)) = material.scatter(ray, &hit, scene_data, rng) {
             // Scatter
-            attenuation.component_mul(&hit_scene(scene, &scatter, depth-1, material_table, rng))
+            attenuation.component_mul(&hit_scene(scene, &scatter, depth-1, scene_data, rng))
         } else {
             // Absorb
             rgb(0.0, 0.0, 0.0)
@@ -39,8 +39,6 @@ fn main() {
     let (output_width, output_height) = (1280, 720);
 
     // Load the scene
-    // let mut scene = example_scenes::three_balls()
-    // let mut scene = example_scenes::more_balls();
     let mut scene = example_scenes::more_balls_optimized();
     scene.camera.aspect_ratio = output_width as Real / output_height as Real;
 
@@ -84,9 +82,9 @@ fn main() {
                     for tj in 0..tile.height() {
                         for ti in 0..tile.width() {
                             let mut color = rgb(0.0, 0.0, 0.0);
-                            for s in sampler.samples_jitter(ti + tile.offset_i(), tj + tile.offset_j(), &mut rng) {
+                            for s in sampler.make_uv_jitter(ti + tile.offset_i(), tj + tile.offset_j(), &mut rng) {
                                 let ray = scene.camera.shoot(s, &mut rng);
-                                color += hit_scene(&scene.root, &ray, max_bounce, &scene.material_table, &mut rng);
+                                color += hit_scene(&scene.root, &ray, max_bounce, &scene.scene_data, &mut rng);
                             }
                             *tile.get_mut(ti, tj) = to_srgb_u8(color / sampler.num_samples as Real);
                         }

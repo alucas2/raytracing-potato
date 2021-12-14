@@ -3,10 +3,13 @@ use raytracing2::hittable::*;
 use raytracing2::material::*;
 use raytracing2::utility::*;
 use raytracing2::bvh::*;
+use raytracing2::texture::*;
+
+// TODO: Have a scene verifier that detects missing texture/material and circular references?
 
 pub struct ExampleScene {
     pub camera: Camera,
-    pub material_table: Vec<Material>,
+    pub scene_data: SceneData,
     pub root: Hittable,
 }
 
@@ -24,23 +27,30 @@ pub fn three_balls() -> ExampleScene {
         ),
     };
 
+    // Table of textures
+    let texture_table = vec![
+        Texture::Solid(rgb(0.8, 0.8, 0.0)),
+        Texture::Solid(rgb(0.1, 0.2, 0.5)),
+    ];
+
     // Table of materials
     let material_table = vec![
-        Material::Lambert {albedo: rgb(0.8, 0.8, 0.0)},
-        Material::Lambert {albedo: rgb(0.1, 0.2, 0.5)},
+        Material::Lambert {albedo: TextureId(0)},
+        Material::Lambert {albedo: TextureId(1)},
         Material::Dielectric {refraction_index: 1.5},
         Material::Metal {albedo: rgb(0.8, 0.6, 0.2), fuzziness: 0.0},
     ];
 
     // List of objects of the scene
     let root = Hittable::List(vec![
-        Hittable::Sphere {center: vector![0.0, -100.5, -1.0], radius: 100.0, material_id: 0}, // Ground
-        Hittable::Sphere {center: vector![0.0, 0.0, -1.0], radius: 0.5, material_id: 1}, // Diffuse sphere
-        Hittable::Sphere {center: vector![-1.0, 0.0, -1.0], radius: 0.5, material_id: 2}, // Metal sphere
-        Hittable::Sphere {center: vector![1.0, 0.0, -1.0], radius: 0.5, material_id: 3}, // Glass sphere
+        Hittable::Sphere {center: vector![0.0, -100.5, -1.0], radius: 100.0, material_id: MaterialId(0)}, // Ground
+        Hittable::Sphere {center: vector![0.0, 0.0, -1.0], radius: 0.5, material_id: MaterialId(1)}, // Diffuse sphere
+        Hittable::Sphere {center: vector![-1.0, 0.0, -1.0], radius: 0.5, material_id: MaterialId(2)}, // Metal sphere
+        Hittable::Sphere {center: vector![1.0, 0.0, -1.0], radius: 0.5, material_id: MaterialId(3)}, // Glass sphere
     ]);
 
-    ExampleScene {camera, material_table, root}
+    let scene_data = SceneData {material_table, texture_table};
+    ExampleScene {camera, scene_data, root}
 }
 
 #[allow(dead_code)]
@@ -57,20 +67,28 @@ pub fn more_balls() -> ExampleScene {
         ),
     };
 
+    // Table of textures
+    let mut texture_table = vec![
+        Texture::Checker {odd: TextureId(2), even: TextureId(3)},
+        Texture::Solid(rgb(0.1, 0.2, 0.5)),
+        Texture::Solid(rgb(0.2, 0.3, 0.1)),
+        Texture::Solid(rgb(0.9, 0.9, 0.9))
+    ];
+
     // Table of materials
     let mut material_table = vec![
-        Material::Lambert {albedo: rgb(0.8, 0.8, 0.0)},
-        Material::Lambert {albedo: rgb(0.1, 0.2, 0.5)},
+        Material::Lambert {albedo: TextureId(0)},
+        Material::Lambert {albedo: TextureId(1)},
         Material::Metal {albedo: rgb(0.8, 0.6, 0.2), fuzziness: 0.0},
         Material::Dielectric {refraction_index: 1.5},
     ];
 
     // List of objects of the scene
     let mut root = vec![
-        Hittable::Sphere {center: vector![0.0, -1000.0, -1.0], radius: 1000.0, material_id: 0}, // Ground
-        Hittable::Sphere {center: vector![-4.0, 1.8, 0.0], radius: 1.8, material_id: 1}, // Diffuse sphere
-        Hittable::Sphere {center: vector![4.0, 1.8, 0.0], radius: 1.8, material_id: 2}, // Metal sphere
-        Hittable::Sphere {center: vector![0.0, 1.8, 0.0], radius: 1.8, material_id: 3}, // Glass sphere
+        Hittable::Sphere {center: vector![0.0, -1000.0, -1.0], radius: 1000.0, material_id: MaterialId(0)}, // Ground
+        Hittable::Sphere {center: vector![-4.0, 1.8, 0.0], radius: 1.8, material_id: MaterialId(1)}, // Diffuse sphere
+        Hittable::Sphere {center: vector![4.0, 1.8, 0.0], radius: 1.8, material_id: MaterialId(2)}, // Metal sphere
+        Hittable::Sphere {center: vector![0.0, 1.8, 0.0], radius: 1.8, material_id: MaterialId(3)}, // Glass sphere
     ];
     let mut rng = StdRng::from_seed([249; 32]);
     for x in -31..31 {
@@ -86,12 +104,14 @@ pub fn more_balls() -> ExampleScene {
                     z as Real + rng.sample(ClosedRange(-0.5 + radius, 0.5 - radius))
                 ],
                 radius,
-                material_id: material_table.len() as Id
+                material_id: MaterialId(material_table.len() as _)
             });
 
             let albedo = rgb(rng.gen::<Real>(), rng.gen::<Real>(), rng.gen::<Real>());
             if rng.sample(Bernoulli(0.7)) {
-                material_table.push(Material::Lambert {albedo});
+                let texture_id = TextureId(texture_table.len() as _);
+                texture_table.push(Texture::Solid(albedo));
+                material_table.push(Material::Lambert {albedo: texture_id});
             } else if rng.sample(Bernoulli(0.7)) {
                 material_table.push(Material::Metal {albedo, fuzziness: rng.gen::<Real>()})
             } else {
@@ -100,7 +120,8 @@ pub fn more_balls() -> ExampleScene {
         }
     }
 
-    ExampleScene {camera, material_table, root: Hittable::List(root)}
+    let scene_data = SceneData {material_table, texture_table};
+    ExampleScene {camera, scene_data, root: Hittable::List(root)}
 }
 
 #[allow(dead_code)]

@@ -1,3 +1,10 @@
+/*
+In this file:
+- Image storage
+- Image saving and loading
+- Image tiling
+*/
+
 use std::fs::File;
 use std::io::{Read, Write, BufReader, BufWriter};
 use std::error::Error;

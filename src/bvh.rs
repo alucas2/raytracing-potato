@@ -3,8 +3,8 @@ use crate::hittable::*;
 
 // ------------------------------------------- Bounding volume hieracrchy -------------------------------------------
 
-pub type NodeId = u32;
-pub type LeafId = u32;
+type NodeId = u32;
+type LeafId = u32;
 
 #[derive(Debug, Clone)]
 enum BvhNode {
@@ -31,7 +31,7 @@ pub struct Bvh {
     root: NodeId,
 }
 
-fn make_bvh(content: &mut [(Id, AABB)], sort_axis: usize, nodes: &mut Vec<BvhNode>) -> NodeId {
+fn make_bvh(content: &mut [(LeafId, AABB)], sort_axis: usize, nodes: &mut Vec<BvhNode>) -> NodeId {
     match content.len() {
         0 => unreachable!(),
         1 => {
@@ -50,7 +50,7 @@ fn make_bvh(content: &mut [(Id, AABB)], sort_axis: usize, nodes: &mut Vec<BvhNod
     }
 }
 
-fn split(content: &mut [(Id, AABB)], sort_axis: usize) -> (&mut [(Id, AABB)], &mut [(Id, AABB)]) {
+fn split(content: &mut [(LeafId, AABB)], sort_axis: usize) -> (&mut [(LeafId, AABB)], &mut [(LeafId, AABB)]) {
     // Sort by bounding box centroid
     content.sort_unstable_by(|(_, x_bb), (_, y_bb)| {
         let x_center = 0.5 * (x_bb.min[sort_axis] + x_bb.max[sort_axis]);
@@ -63,7 +63,9 @@ fn split(content: &mut [(Id, AABB)], sort_axis: usize) -> (&mut [(Id, AABB)], &m
 
 impl Bvh {
     pub fn new(hittables: Vec<Hittable>) -> Self {
-        let mut content = hittables.iter().enumerate().map(|(id, x)| (id as Id, x.bounding_box())).collect::<Vec<_>>();
+        let mut content = hittables.iter().enumerate().map(|(id, x)| (id as LeafId, x.bounding_box()))
+            .collect::<Vec<_>>();
+        
         let mut nodes = Vec::new();
         let root = make_bvh(&mut content, 0, &mut nodes);
 

@@ -5,25 +5,35 @@ use crate::{utility::*, hittable::Hit};
 #[derive(Debug, Clone)]
 pub enum Material {
     Missing,
-    Lambert {albedo: Color},
+    Lambert {albedo: TextureId},
     Metal {albedo: Color, fuzziness: Real},
     Dielectric {refraction_index: Real},
 }
 
 impl Material {
-    pub fn scatter(&self, incident: &Ray, hit: &Hit, rng: &mut Randomizer) -> Option<(Color, Ray)> {
+    pub fn scatter(&self, incident: &Ray, hit: &Hit, scene_data: &SceneData, rng: &mut Randomizer)
+        -> Option<(Color, Ray)>
+    {
         match self {
             Self::Missing => None,
-            Self::Lambert {albedo} => scatter_lambert(incident, hit, *albedo, rng),
-            Self::Metal {albedo, fuzziness} => scatter_metal(incident, hit, *albedo, *fuzziness, rng),
-            Self::Dielectric {refraction_index} => scatter_dielectric(incident, hit, *refraction_index, rng),
+            Self::Lambert {albedo} => {
+                scatter_lambert(incident, hit, scene_data, rng, *albedo)
+            },
+            Self::Metal {albedo, fuzziness} => {
+                scatter_metal(incident, hit, *albedo, *fuzziness, rng)
+            },
+            Self::Dielectric {refraction_index} => {
+                scatter_dielectric(incident, hit, *refraction_index, rng)
+            },
         }
     }
 }
 
 // ------------------------------------------- Material implementations -------------------------------------------
 
-fn scatter_lambert(incident: &Ray, hit: &Hit, albedo: Color, rng: &mut Randomizer) -> Option<(Color, Ray)> {
+fn scatter_lambert(incident: &Ray, hit: &Hit, scene_data: &SceneData, rng: &mut Randomizer, albedo: TextureId)
+    -> Option<(Color, Ray)>
+{
     if hit.normal.dot(&incident.direction) > 0.0 {
         return None
     }
@@ -37,6 +47,9 @@ fn scatter_lambert(incident: &Ray, hit: &Hit, albedo: Color, rng: &mut Randomize
         t_min: RAY_EPSILON,
         t_max: INFINITY,
     };
+
+    let albedo = scene_data.texture_table[albedo.to_index()].sample(incident, hit, scene_data, rng);
+
     Some((albedo, scattered))
 }
 

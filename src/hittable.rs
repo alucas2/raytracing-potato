@@ -5,20 +5,17 @@ use crate::bvh::Bvh;
 
 #[derive(Clone)]
 pub enum Hittable {
-    Sphere {center: Rvec3, radius: Real, material_id: Id},
+    Sphere {center: Rvec3, radius: Real, material_id: MaterialId},
     List(Vec<Hittable>),
     Bvh(Bvh),
 }
 
 pub struct Hit {
-    /// Distance of the hit position to the ray origin
     pub t: Real,
-    /// Hit position
     pub position: Rvec3,
-    /// Normal at the hit position as a unit vector
-    pub normal: Rvec3,
-    /// Material at the hit position
-    pub material_id: Id,
+    pub normal: Rvec3, // <-- Keep this vector normalized
+    pub uv: Rvec2,
+    pub material_id: MaterialId,
 }
 
 impl Hittable {
@@ -41,7 +38,7 @@ impl Hittable {
 
 // ------------------------------------------- Hit implementations -------------------------------------------
 
-fn hit_sphere(center: &Rvec3, radius: Real, material_id: Id, ray: &Ray) -> Option<Hit> {
+fn hit_sphere(center: &Rvec3, radius: Real, material_id: MaterialId, ray: &Ray) -> Option<Hit> {
     let to_center = ray.origin - center;
     let a = ray.direction.norm_squared();
     let half_b = ray.direction.dot(&to_center);
@@ -51,6 +48,7 @@ fn hit_sphere(center: &Rvec3, radius: Real, material_id: Id, ray: &Ray) -> Optio
         return None
     }
     
+    // Compute the intersection parameter t
     let sqrt_delta = delta.sqrt();
     let mut t = (-half_b - sqrt_delta) / a; // Try the closer hit
     if t < ray.t_min || t > ray.t_max {
@@ -62,7 +60,9 @@ fn hit_sphere(center: &Rvec3, radius: Real, material_id: Id, ray: &Ray) -> Optio
 
     let position = ray.at(t);
     let normal = (position - center).normalize();
-    Some(Hit {t, position, normal, material_id})
+    let uv = vector![normal.y.asin() / PI + 0.5, 0.5 - normal.z.atan2(normal.x) / TAU];
+
+    Some(Hit {t, position, normal, uv, material_id})
 }
 
 fn hit_list(list: &[Hittable], ray: &Ray) -> Option<Hit> {
