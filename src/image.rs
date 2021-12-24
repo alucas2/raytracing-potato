@@ -9,22 +9,17 @@ use std::fs::File;
 use std::io::{Read, Write, BufReader, BufWriter};
 use std::error::Error;
 
-// ------------------------------------------- Image -------------------------------------------
-
-#[derive(Default)]
-pub struct RgbaImage {
+#[derive(Debug, Clone)]
+pub struct Array2d<T> {
     width: u32,
     height: u32,
-    data: Vec<[u8; 4]>,
+    storage: Vec<T>,
 }
 
-impl RgbaImage {
-    /// Create an empty image with the given width and height
+impl<'a, T: Clone + Default + 'a> Array2d<T> {
     pub fn new(width: u32, height: u32) -> Self {
-        RgbaImage {
-            width, height,
-            data: vec![[0, 0, 0, 0]; (width * height) as usize]
-        }
+        let storage = vec![T::default(); (width * height) as usize];
+        Array2d {width, height, storage}
     }
 
     pub fn width(&self) -> u32 {
@@ -35,14 +30,12 @@ impl RgbaImage {
         self.height
     }
 
-    /// Access a pixel immutably
-    pub fn get(&self, i: u32, j: u32) -> &[u8; 4] {
-        &self.data[(i + j * self.width) as usize]
+    pub fn get(&self, i: u32, j: u32) -> &T {
+        &self.storage[(i + j * self.width) as usize]
     }
 
-    /// Access a pixel mutably
-    pub fn get_mut(&mut self, i: u32, j: u32) -> &mut [u8; 4] {
-        &mut self.data[(i + j * self.width) as usize]
+    pub fn get_mut(&mut self, i: u32, j: u32) -> &mut T {
+        &mut self.storage[(i + j * self.width) as usize]
     }
 }
 
@@ -76,7 +69,7 @@ pub mod tga {
         }
     }
 
-    pub fn load(path: &str) -> Result<RgbaImage, Box<dyn Error>> {
+    pub fn load(path: &str) -> Result<Array2d<[u8; 4]>, Box<dyn Error>> {
         let mut file = BufReader::new(File::open(path)?);
         
         // Read header
@@ -95,10 +88,7 @@ pub mod tga {
         }
 
         // Read data
-        let mut image = RgbaImage::default();
-        image.width = header.width.into();
-        image.height = header.height.into();
-        image.data.resize((image.width * image.height) as usize, [0; 4]);
+        let mut image = Array2d::new(header.width as u32, header.height as u32);
         for y in 0..image.height {
             for x in 0..image.width {
                 // To flip vertically or not
@@ -123,7 +113,7 @@ pub mod tga {
         Ok(image)
     }
 
-    pub fn save(image: &RgbaImage, path: &str) -> Result<(), Box<dyn Error>> {
+    pub fn save(image: &Array2d<[u8; 4]>, path: &str) -> Result<(), Box<dyn Error>> {
         let mut file = BufWriter::new(File::create(path)?);
         let mut header = TgaHeader::default();
 
@@ -149,61 +139,30 @@ pub mod tga {
 
 // ------------------------------------------- Image tiling -------------------------------------------
 
+#[derive(Debug, Clone)]
 pub struct Tile {
-    pixel_offset: (u32, u32),
-    data: RgbaImage,
+    pub offset_i: u32,
+    pub offset_j: u32,
+    pub width: u32,
+    pub height: u32,
 }
 
 impl Tile {
-    pub fn generate(full_width: u32, full_height: u32, tile_width: u32, tile_height: u32) -> Vec<Self> {
+    pub fn split_in_tiles(full_width: u32, full_height: u32, tile_width: u32, tile_height: u32) -> Vec<Tile>
+    {
         let num_tiles_i = (full_width + tile_width - 1) / tile_width;
         let num_tiles_j = (full_height + tile_height - 1) / tile_height;
-        let mut tiles = Vec::new();
+        let mut tile_descriptions = Vec::new();
         
         for tj in 0..num_tiles_j {
             for ti in 0..num_tiles_i {
-                let pixel_offset = (ti * tile_width, tj * tile_height);
-                let data = RgbaImage::new(
-                    tile_width.min(full_width - pixel_offset.0),
-                    tile_height.min(full_height - pixel_offset.1),
-                );
-                tiles.push(Tile {pixel_offset, data}); 
+                let offset_i = ti * tile_width;
+                let offset_j = tj * tile_height;
+                let width = tile_width.min(full_width - offset_i);
+                let height = tile_height.min(full_height - offset_j);
+                tile_descriptions.push(Tile {offset_i, offset_j, width, height}); 
             }
         }
-        tiles
-    }
-
-    pub fn write_to(&self, full_image: &mut RgbaImage) {
-        for j in 0..self.data.height {
-            for i in 0..self.data.width {
-                *full_image.get_mut(i + self.pixel_offset.0, j + self.pixel_offset.1) = *self.data.get(i, j);
-            }
-        }
-    }
-
-    pub fn offset_i(&self) -> u32 {
-        self.pixel_offset.0
-    }
-
-    pub fn offset_j(&self) -> u32 {
-        self.pixel_offset.1
-    }
-
-    pub fn width(&self) -> u32 {
-        self.data.width
-    }
-
-    pub fn height(&self) -> u32 {
-        self.data.height
-    }
-
-    /// Access a pixel immutably
-    pub fn get(&self, i: u32, j: u32) -> &[u8; 4] {
-        self.data.get(i, j)
-    }
-
-    /// Access a pixel mutably
-    pub fn get_mut(&mut self, i: u32, j: u32) -> &mut [u8; 4] {
-        self.data.get_mut(i, j)
+        tile_descriptions
     }
 }

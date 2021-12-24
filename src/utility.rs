@@ -2,23 +2,22 @@
 In this file:
 - Types and constants
 - Ray
-- Image sampling
-- Specialized math
+- Some math
 - Bounding boxes
 - Transformations
 - Color
 - Random distributions
+- Noise
 */
 
 // ------------------------------------------- Types and constants -------------------------------------------
 
 pub type Real = f64; // <-- Choose here between f64 and f32
-pub use std::f64::{consts::*, INFINITY}; // <-- and here
+pub use std::f64::{consts::*, INFINITY}; // <-- and here as well
 pub type Rvec2 = nalgebra::Vector2<Real>;
 pub type Rvec3 = nalgebra::Vector3<Real>;
 pub type Bvec3 = nalgebra::Vector3<bool>;
 pub type Rmat3 = nalgebra::Matrix3<Real>;
-pub type Randomizer = rand::rngs::StdRng;
 
 /*
 I do not use naglebra's fancy wrappers like Point and Unit because:
@@ -27,8 +26,6 @@ I do not use naglebra's fancy wrappers like Point and Unit because:
 */
 
 pub use nalgebra::{vector, matrix};
-pub use rand::{prelude::*, Rng};
-use rand::distributions::Distribution;
 
 /// Nudge the start of the ray to avoid self-intersection
 pub const RAY_EPSILON: Real = 1e-3;
@@ -88,36 +85,6 @@ impl Ray {
             inner: self,
             inv_direction,
         }
-    }
-}
-
-// ------------------------------------------- Image sampling -------------------------------------------
-
-#[derive(Debug, Clone)]
-pub struct Multisampler {
-    pub width: u32,
-    pub height: u32,
-    pub num_samples: u32
-}
-
-impl Multisampler {
-    /// Get the sample coordinates of a pixel, in the range [0, 1]
-    pub fn make_uv(&self, i: u32, j: u32) -> Rvec2 {
-        vector![
-            i as Real / self.width as Real,
-            j as Real / self.height as Real
-        ]
-    }
-
-    /// Get multiple samples coordinates for a pixel, in the range [0, 1]
-    pub fn make_uv_jitter(&self, i: u32, j: u32, rng: &mut Randomizer) -> impl Iterator<Item=Rvec2> + '_ {
-        let mut rng = rng.clone();
-        (0..self.num_samples).map(move |_| {
-            vector![
-                (i as Real + rng.gen::<Real>()) / self.width as Real,
-                (j as Real + rng.gen::<Real>()) / self.height as Real
-            ]
-        })
     }
 }
 
@@ -214,89 +181,28 @@ impl Transformation {
 
 // ------------------------------------------- Color -------------------------------------------
 
-pub type Color = nalgebra::Vector4<Real>;
+pub type Color = nalgebra::Vector3<Real>;
 
 pub fn rgb(r: Real, g: Real, b: Real) -> Color {
-    nalgebra::Vector4::new(r, g, b, 1.0)
+    vector![r, g, b]
 }
 
-pub fn to_srgb_u8(color: Color) -> [u8; 4] {
-    color.map(|x| (255.0 * x.clamp(0.0, 1.0).powf(1.0/2.2)) as u8).into()
+pub fn to_u8(color: &Color) -> [u8; 4] {
+    let clamp_and_cast = |x: Real| (255.0 * x.clamp(0.0, 1.0)) as u8;
+    [
+        clamp_and_cast(color.x),
+        clamp_and_cast(color.y),
+        clamp_and_cast(color.z),
+        0xff,
+    ]
 }
 
-// ------------------------------------------- Randomness -------------------------------------------
-
-/// A uniform distribution inside a range
-pub struct ClosedRange(pub Real, pub Real);
-
-impl Distribution<Real> for ClosedRange {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Real {
-        self.0 + rng.gen::<Real>() * (self.1 - self.0)
-    }
-}
-
-/// A uniform distribution of vectors inside the unit disk
-pub struct UnitDisk;
-
-impl Distribution<Rvec2> for UnitDisk {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Rvec2 {
-        loop {
-            let v = vector![
-                2.0 * rng.gen::<Real>() - 1.0,
-                2.0 * rng.gen::<Real>() - 1.0
-            ];
-
-            if v.norm_squared() < 1.0 {
-                return v
-            }
-        }
-    }
-}
-
-/// A uniform distribution of vectors inside the unit ball
-pub struct UnitBall;
-
-impl Distribution<Rvec3> for UnitBall {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Rvec3 {
-        loop {
-            let v = vector![
-                2.0 * rng.gen::<Real>() - 1.0,
-                2.0 * rng.gen::<Real>() - 1.0,
-                2.0 * rng.gen::<Real>() - 1.0
-            ];
-
-            if v.norm_squared() < 1.0 {
-                return v
-            }
-        }
-    }
-}
-
-/// A uniform distribution of vectors on the unit sphere
-pub struct UnitSphere;
-
-impl Distribution<Rvec3> for UnitSphere {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Rvec3 {
-        loop {
-            let v = vector![
-                2.0 * rng.gen::<Real>() - 1.0,
-                2.0 * rng.gen::<Real>() - 1.0
-            ];
-
-            let s = v.norm_squared();
-            if s < 1.0 {
-                let n = 2.0 * (1.0 - s).sqrt();
-                return vector![v.x * n, v.y * n, 1.0 - 2.0 * s]
-            }
-        }
-    }
-}
-
-/// A distribution with a probability p for true and 1-p of false
-pub struct Bernoulli(pub Real);
-
-impl Distribution<bool> for Bernoulli {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> bool {
-        rng.gen::<Real>() < self.0
-    }
+pub fn to_srgb_u8(color: &Color) -> [u8; 4] {
+    let clamp_and_gamma_correct = |x: Real| (255.0 * x.clamp(0.0, 1.0).powf(1.0/2.2)) as u8;
+    [
+        clamp_and_gamma_correct(color.x),
+        clamp_and_gamma_correct(color.y),
+        clamp_and_gamma_correct(color.z),
+        0xff,
+    ]
 }

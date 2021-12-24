@@ -1,4 +1,5 @@
 use crate::utility::*;
+use crate::randomness::*;
 use crate::render::SceneData;
 
 // ------------------------------------------- Material -------------------------------------------

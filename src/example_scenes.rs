@@ -4,6 +4,7 @@ use raytracing2::utility::*;
 use raytracing2::bvh::*;
 use raytracing2::texture::*;
 use raytracing2::render::*;
+use raytracing2::randomness::*;
 
 // TODO: Have a scene verifier that detects missing texture/material and circular references?
 // It would use string ids instead of integers for ease of use and to allow the merging or multiple scenes
@@ -70,7 +71,7 @@ pub fn more_balls() -> ExampleScene {
 
     // Table of textures
     let mut texture_table = vec![
-        Texture::Checker {odd: TextureId(2), even: TextureId(3), freq: 2.0},
+        Texture::Checker {odd: TextureId(2), even: TextureId(3)},
         Texture::Solid(rgb(0.1, 0.2, 0.5)),
         Texture::Solid(rgb(0.2, 0.3, 0.1)),
         Texture::Solid(rgb(0.9, 0.9, 0.9))
@@ -91,7 +92,7 @@ pub fn more_balls() -> ExampleScene {
         Hittable::Sphere {center: vector![4.0, 1.8, 0.0], radius: 1.8, material: MaterialId(2)}, // Metal sphere
         Hittable::Sphere {center: vector![0.0, 1.8, 0.0], radius: 1.8, material: MaterialId(3)}, // Glass sphere
     ];
-    let mut rng = StdRng::from_seed([249; 32]);
+    let mut rng = Randomizer::from_seed([249; 32]);
     for x in -31..31 {
         for z in -31..31 {
             if z == 0 {
@@ -154,8 +155,8 @@ pub fn two_balls() -> ExampleScene {
     let texture_table = vec![
         Texture::Solid(rgb(0.2, 0.2, 0.2)),
         Texture::Solid(rgb(0.9, 0.0, 0.5)),
-        Texture::Checker {odd: TextureId(0), even: TextureId(1), freq: 2.0},
-        Texture::Noise {freq: 2.0},
+        Texture::Checker {odd: TextureId(0), even: TextureId(1)},
+        Texture::Perlin {seed: 0},
     ];
 
     let material_table = vec![
