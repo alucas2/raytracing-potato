@@ -52,7 +52,7 @@ fn hit_sphere(center: &Rvec3, radius: Real, material: MaterialId, ray: &Ray) -> 
 
     let position = ray.at(t);
     let normal = (position - center).normalize();
-    let uv = vector![normal.y.asin() / PI + 0.5, 0.5 - normal.z.atan2(normal.x) / TAU];
+    let uv = vector![0.5 - normal.z.atan2(normal.x) / TAU, normal.y.asin() / PI + 0.5];
 
     Some(Hit {t, position, normal, uv, material})
 }

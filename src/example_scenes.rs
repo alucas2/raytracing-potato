@@ -5,6 +5,7 @@ use raytracing2::bvh::*;
 use raytracing2::texture::*;
 use raytracing2::render::*;
 use raytracing2::randomness::*;
+use raytracing2::image::*;
 
 // TODO: Have a scene verifier that detects missing texture/material and circular references?
 // It would use string ids instead of integers for ease of use and to allow the merging or multiple scenes
@@ -171,4 +172,34 @@ pub fn two_balls() -> ExampleScene {
 
     let scene_data = SceneData {material_table, texture_table};
     ExampleScene {camera, scene_data, root}
+}
+
+#[allow(dead_code)]
+pub fn earth() -> ExampleScene {
+    let camera = Camera {
+        aspect_ratio: 1.0,
+        fov: PI / 9.0,
+        focal_dist: 1.0,
+        lens_radius: 0.0,
+        transformation: Transformation::lookat(
+            &vector![13.0, 7.0, 3.0],
+            &vector![0.0, 0.0, 0.0],
+            &vector![0.0, 1.0, 0.0]
+        ),
+    };
+
+    let texture_table = vec![
+        Texture::Image(tga::load("assets/earthmap.tga").unwrap())
+    ];
+
+    let material_table = vec![
+        Material::Lambert {albedo: TextureId(0)}
+    ];
+
+    let root = Hittable::Bvh(Bvh::new(vec![
+        Hittable::Sphere {center: vector![0.0, 0.0, 0.0], radius: 2.0, material: MaterialId(0)}
+    ]));
+
+    let scene_data = SceneData {material_table, texture_table};
+    ExampleScene {camera, root, scene_data}
 }

@@ -1,5 +1,5 @@
 /target
 .vscode/
 Cargo.lock
-*.tga
+/*.tga
 *.py

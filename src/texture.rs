@@ -1,12 +1,14 @@
 use crate::utility::*;
 use crate::randomness::*;
 use crate::render::SceneData;
+use crate::image::Array2d;
 
 // ------------------------------------------- Texture -------------------------------------------
 
 pub enum Texture {
     Missing,
     Solid(Color),
+    Image(Array2d<[u8; 4]>),
     Checker {odd: TextureId, even: TextureId},
     Noise {seed: isize},
     Perlin {seed: isize},
@@ -17,6 +19,8 @@ impl Texture {
         match self {
             Self::Missing => rgb(0.0, 0.0, 0.0),
             Self::Solid(color) => *color,
+            Self::Image(image)
+                => sample_image(incident, hit, scene_data, rng, image),
             Self::Checker {odd, even}
                 => sample_checker(incident, hit, scene_data, rng, *odd, *even),
             Self::Noise {seed}
@@ -28,6 +32,17 @@ impl Texture {
 }
 
 // ------------------------------------------- Texture implementations -------------------------------------------
+
+pub fn sample_image(_incident: &Ray, hit: &Hit, _scene_data: &SceneData, _rng: &mut Randomizer,
+    image: &Array2d<[u8; 4]>) -> Color
+{
+    let w = image.width() as Real;
+    let h = image.height() as Real;
+    let i = (hit.uv.x * w).clamp(0.0, w-1.0) as u32;
+    let j = (hit.uv.y * h).clamp(0.0, h-1.0) as u32;
+    let pixel = image.get(i, j);
+    rgb(pixel[0] as Real, pixel[1] as Real, pixel[2] as Real) / 255.0
+}
 
 pub fn sample_checker(incident: &Ray, hit: &Hit, scene_data: &SceneData, rng: &mut Randomizer, odd: TextureId,
     even: TextureId) -> Color

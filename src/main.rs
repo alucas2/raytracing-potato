@@ -20,7 +20,8 @@ fn main() {
 
     // Load the scene
     // let mut scene = example_scenes::two_balls();
-    let mut scene = example_scenes::more_balls_optimized();
+    // let mut scene = example_scenes::more_balls_optimized();
+    let mut scene = example_scenes::earth();
     scene.camera.aspect_ratio = output_width as Real / output_height as Real;
 
     // Renderer parameters

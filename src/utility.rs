@@ -6,8 +6,6 @@ In this file:
 - Bounding boxes
 - Transformations
 - Color
-- Random distributions
-- Noise
 */
 
 // ------------------------------------------- Types and constants -------------------------------------------
