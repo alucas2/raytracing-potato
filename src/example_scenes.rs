@@ -14,6 +14,7 @@ pub struct ExampleScene {
     pub camera: Camera,
     pub scene_data: SceneData,
     pub root: Hittable,
+    pub background: Emit,
 }
 
 #[allow(dead_code)]
@@ -38,10 +39,10 @@ pub fn three_balls() -> ExampleScene {
 
     // Table of materials
     let material_table = vec![
-        Material::Lambert {albedo: TextureId(0)},
-        Material::Lambert {albedo: TextureId(1)},
-        Material::Dielectric {refraction_index: 1.5},
-        Material::Metal {albedo: rgb(0.8, 0.6, 0.2), fuzziness: 0.0},
+        Material::new(Scatter::Lambert, Absorb::AlbedoMap(TextureId(0)), Emit::None),
+        Material::new(Scatter::Lambert, Absorb::AlbedoMap(TextureId(1)), Emit::None),
+        Material::new(Scatter::Dielectric {refraction_index: 1.5}, Absorb::WhiteBody, Emit::None),
+        Material::new(Scatter::Metal {fuzziness: 0.0}, Absorb::Albedo(rgb(0.8, 0.6, 0.2)), Emit::None),
     ];
 
     // List of objects of the scene
@@ -53,7 +54,8 @@ pub fn three_balls() -> ExampleScene {
     ]);
 
     let scene_data = SceneData {material_table, texture_table};
-    ExampleScene {camera, scene_data, root}
+    let background = Emit::SkyBackground;
+    ExampleScene {camera, scene_data, root, background}
 }
 
 #[allow(dead_code)]
@@ -71,19 +73,18 @@ pub fn more_balls() -> ExampleScene {
     };
 
     // Table of textures
-    let mut texture_table = vec![
-        Texture::Checker {odd: TextureId(2), even: TextureId(3)},
-        Texture::Solid(rgb(0.1, 0.2, 0.5)),
+    let texture_table = vec![
+        Texture::Checker {odd: TextureId(1), even: TextureId(2)},
         Texture::Solid(rgb(0.2, 0.3, 0.1)),
         Texture::Solid(rgb(0.9, 0.9, 0.9))
     ];
 
     // Table of materials
     let mut material_table = vec![
-        Material::Lambert {albedo: TextureId(0)},
-        Material::Lambert {albedo: TextureId(1)},
-        Material::Metal {albedo: rgb(0.8, 0.6, 0.2), fuzziness: 0.0},
-        Material::Dielectric {refraction_index: 1.5},
+        Material::new(Scatter::Lambert, Absorb::AlbedoMap(TextureId(0)), Emit::None),
+        Material::new(Scatter::Lambert, Absorb::Albedo(rgb(0.1, 0.2, 0.5)), Emit::None),
+        Material::new(Scatter::Metal {fuzziness: 0.0}, Absorb::Albedo(rgb(0.8, 0.6, 0.2)), Emit::None),
+        Material::new(Scatter::Dielectric {refraction_index: 1.5}, Absorb::WhiteBody, Emit::None),
     ];
 
     // List of objects of the scene
@@ -112,19 +113,27 @@ pub fn more_balls() -> ExampleScene {
 
             let albedo = rgb(rng.gen::<Real>(), rng.gen::<Real>(), rng.gen::<Real>());
             if rng.sample(Bernoulli(0.7)) {
-                let texture_id = TextureId(texture_table.len() as _);
-                texture_table.push(Texture::Solid(albedo));
-                material_table.push(Material::Lambert {albedo: texture_id});
+                // Random lambert material
+                material_table.push(Material::new(
+                    Scatter::Lambert, Absorb::Albedo(albedo), Emit::None
+                ));
             } else if rng.sample(Bernoulli(0.7)) {
-                material_table.push(Material::Metal {albedo, fuzziness: rng.gen::<Real>()})
+                // Random metal
+                material_table.push(Material::new(
+                    Scatter::Metal {fuzziness: rng.gen::<Real>()}, Absorb::Albedo(albedo), Emit::None
+                ));
             } else {
-                material_table.push(Material::Dielectric {refraction_index: 1.5})
+                // Glass
+                material_table.push(Material::new(
+                    Scatter::Dielectric {refraction_index: 1.5}, Absorb::WhiteBody, Emit::None
+                ));
             }
         }
     }
 
     let scene_data = SceneData {material_table, texture_table};
-    ExampleScene {camera, scene_data, root: Hittable::List(root)}
+    let background = Emit::SkyBackground;
+    ExampleScene {camera, scene_data, root: Hittable::List(root), background}
 }
 
 #[allow(dead_code)]
@@ -161,8 +170,8 @@ pub fn two_balls() -> ExampleScene {
     ];
 
     let material_table = vec![
-        Material::Lambert {albedo: TextureId(2)},
-        Material::Lambert {albedo: TextureId(3)}
+        Material::new(Scatter::Lambert, Absorb::AlbedoMap(TextureId(2)), Emit::None),
+        Material::new(Scatter::Lambert, Absorb::AlbedoMap(TextureId(3)), Emit::None),
     ];
 
     let root = Hittable::Bvh(Bvh::new(vec![
@@ -171,7 +180,8 @@ pub fn two_balls() -> ExampleScene {
     ]));
 
     let scene_data = SceneData {material_table, texture_table};
-    ExampleScene {camera, scene_data, root}
+    let background = Emit::SkyBackground;
+    ExampleScene {camera, scene_data, root, background}
 }
 
 #[allow(dead_code)]
@@ -193,7 +203,7 @@ pub fn earth() -> ExampleScene {
     ];
 
     let material_table = vec![
-        Material::Lambert {albedo: TextureId(0)}
+        Material::new(Scatter::Lambert, Absorb::AlbedoMap(TextureId(0)), Emit::None)
     ];
 
     let root = Hittable::Bvh(Bvh::new(vec![
@@ -201,5 +211,6 @@ pub fn earth() -> ExampleScene {
     ]));
 
     let scene_data = SceneData {material_table, texture_table};
-    ExampleScene {camera, root, scene_data}
+    let background = Emit::SkyBackground;
+    ExampleScene {camera, root, scene_data, background}
 }

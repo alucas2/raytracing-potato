@@ -9,16 +9,11 @@ use indicatif::ProgressBar;
 
 mod example_scenes;
 
-fn sky_background(ray: &Ray) -> Color {
-    let unit_direction = ray.direction.normalize();
-    let t = 0.5 * (unit_direction.y + 1.0);
-    (1.0 - t) * rgb(1.0, 1.0, 1.0) + t * rgb(0.5, 0.7, 1.0)
-}
-
 fn main() {
     let (output_width, output_height) = (1280, 720);
 
     // Load the scene
+    // let mut scene = example_scenes::three_balls();
     // let mut scene = example_scenes::two_balls();
     // let mut scene = example_scenes::more_balls_optimized();
     let mut scene = example_scenes::earth();
@@ -32,7 +27,7 @@ fn main() {
     let sampler = Multisampler {
         width: output_width,
         height: output_height,
-        num_samples: 32,
+        num_samples: 1,
     };
     
     // Put tiles into the job queue
@@ -78,7 +73,7 @@ fn main() {
                             for s in samples {
                                 let ray = scene.camera.shoot(s, &mut rng);
                                 let trace_out = trace_path(
-                                    &scene.root, &ray, max_bounce, &scene.scene_data, &mut rng, sky_background
+                                    &scene.root, &ray, max_bounce, &scene.scene_data, &mut rng, &scene.background
                                 );
                                 final_color += trace_out.final_color;
                                 if trace_out.hit {

@@ -2,6 +2,7 @@
 In this file:
 - Types and constants
 - Ray
+- Hit
 - Some math
 - Bounding boxes
 - Transformations
@@ -62,16 +63,6 @@ pub struct RayExpanded {
     pub inv_direction: Rvec3,
 }
 
-/// A collision between a ray and an object
-#[derive(Debug, Clone)]
-pub struct Hit {
-    pub t: Real,
-    pub position: Rvec3,
-    pub normal: Rvec3, // <-- Keep this vector normalized
-    pub uv: Rvec2,
-    pub material: MaterialId,
-}
-
 impl Ray {
     pub fn at(&self, t: Real) -> Rvec3 {
         self.origin + t * self.direction
@@ -82,6 +73,28 @@ impl Ray {
         RayExpanded {
             inner: self,
             inv_direction,
+        }
+    }
+}
+
+// ------------------------------------------- Hit -------------------------------------------
+
+/// A collision between a ray and an object
+#[derive(Debug, Clone)]
+pub struct Hit {
+    pub t: Real,
+    pub position: Rvec3,
+    pub normal: Rvec3, // <-- Keep this vector normalized
+    pub uv: Rvec2,
+}
+
+impl Hit {
+    pub fn at_infinity(direction: &Rvec3) -> Hit {
+        Hit {
+            t: INFINITY,
+            position: direction.clone(),
+            normal: direction.clone(),
+            uv: vector![0.5 - direction.z.atan2(direction.x) / TAU, direction.y.asin() / PI + 0.5],
         }
     }
 }

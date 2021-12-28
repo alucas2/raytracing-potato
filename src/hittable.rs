@@ -11,7 +11,7 @@ pub enum Hittable {
 }
 
 impl Hittable {
-    pub fn hit(&self, ray: &Ray) -> Option<Hit> {
+    pub fn hit(&self, ray: &Ray) -> Option<(Hit, MaterialId)> {
         match self {
             Self::Sphere {center, radius, material} => hit_sphere(center, *radius, *material, ray),
             Self::List(list) => hit_list(list, ray),
@@ -30,7 +30,7 @@ impl Hittable {
 
 // ------------------------------------------- Hit implementations -------------------------------------------
 
-fn hit_sphere(center: &Rvec3, radius: Real, material: MaterialId, ray: &Ray) -> Option<Hit> {
+fn hit_sphere(center: &Rvec3, radius: Real, material: MaterialId, ray: &Ray) -> Option<(Hit, MaterialId)> {
     let to_center = ray.origin - center;
     let a = ray.direction.norm_squared();
     let half_b = ray.direction.dot(&to_center);
@@ -54,15 +54,15 @@ fn hit_sphere(center: &Rvec3, radius: Real, material: MaterialId, ray: &Ray) -> 
     let normal = (position - center).normalize();
     let uv = vector![0.5 - normal.z.atan2(normal.x) / TAU, normal.y.asin() / PI + 0.5];
 
-    Some(Hit {t, position, normal, uv, material})
+    Some((Hit {t, position, normal, uv}, material))
 }
 
-fn hit_list(list: &[Hittable], ray: &Ray) -> Option<Hit> {
+fn hit_list(list: &[Hittable], ray: &Ray) -> Option<(Hit, MaterialId)> {
     let mut hit = None;
     let mut ray = ray.clone();
     for x in list {
         if let Some(new_hit) = x.hit(&ray) {
-            ray.t_max = new_hit.t;
+            ray.t_max = new_hit.0.t;
             hit.replace(new_hit);
         }
     }

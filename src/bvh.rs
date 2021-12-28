@@ -85,7 +85,7 @@ impl Bvh {
         }
     }
 
-    fn hit_node(&self, ray: &RayExpanded, node: NodeId) -> Option<Hit> {
+    fn hit_node(&self, ray: &RayExpanded, node: NodeId) -> Option<(Hit, MaterialId)> {
         match &self.nodes[node as usize] {
             BvhNode::Leaf {leaf, ..} => self.leaves[*leaf as usize].hit(&ray.inner),
             BvhNode::Branch {aabb, left, right} => {
@@ -93,7 +93,7 @@ impl Bvh {
                     let mut hit = None;
                     let mut ray = ray.clone();
                     if let Some(new_hit) = self.hit_node(&ray, *left) {
-                        ray.inner.t_max = new_hit.t;
+                        ray.inner.t_max = new_hit.0.t;
                         hit.replace(new_hit);
                     }
                     if let Some(new_hit) = self.hit_node(&ray, *right) {
@@ -107,7 +107,7 @@ impl Bvh {
         }
     }
 
-    pub fn hit(&self, ray: &Ray) -> Option<Hit> {
+    pub fn hit(&self, ray: &Ray) -> Option<(Hit, MaterialId)> {
         let ray = ray.clone().expand();
         self.hit_node(&ray, self.root)
     }

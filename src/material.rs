@@ -1,38 +1,111 @@
+/*
+In this file:
+- Scattering functions
+- Absorption functions
+- Emission functions
+- Material = aggregate of one scattering, one absorption and one emission function
+*/
+
 use crate::utility::*;
 use crate::randomness::*;
 use crate::render::SceneData;
 
-// ------------------------------------------- Material -------------------------------------------
+// ------------------------------------------- Scattering -------------------------------------------
 
 #[derive(Debug, Clone)]
-pub enum Material {
-    Missing,
-    Lambert {albedo: TextureId},
-    Metal {albedo: Color, fuzziness: Real},
+pub enum Scatter {
+    None,
+    Lambert,
+    Metal {fuzziness: Real},
     Dielectric {refraction_index: Real},
 }
 
-impl Material {
-    pub fn scatter(&self, incident: &Ray, hit: &Hit, scene_data: &SceneData, rng: &mut Randomizer)
-        -> Option<(Color, Ray)>
-    {
+impl Scatter {
+    pub fn evaluate(&self, incident: &Ray, hit: &Hit, _scene_data: &SceneData, rng: &mut Randomizer) -> Option<Ray> {
         match self {
-            Self::Missing => None,
-            Self::Lambert {albedo}
-                => scatter_lambert(incident, hit, scene_data, rng, *albedo),
-            Self::Metal {albedo, fuzziness}
-                => scatter_metal(incident, hit, scene_data, rng, *albedo, *fuzziness),
-            Self::Dielectric {refraction_index}
-                => scatter_dielectric(incident, hit, scene_data, rng, *refraction_index),
+            Self::None => None,
+            Self::Lambert => evaluate_lambert(incident, hit, rng),
+            Self::Metal {fuzziness} => evaluate_metal(incident, hit, rng, *fuzziness),
+            Self::Dielectric {refraction_index} => evaluate_dielectric(incident, hit, rng, *refraction_index),
         }
     }
 }
 
-// ------------------------------------------- Material implementations -------------------------------------------
+// ------------------------------------------- Emission -------------------------------------------
 
-fn scatter_lambert(incident: &Ray, hit: &Hit, scene_data: &SceneData, rng: &mut Randomizer, albedo: TextureId)
-    -> Option<(Color, Ray)>
-{
+#[derive(Debug, Clone)]
+pub enum Emit {
+    None,
+    SkyBackground,
+    Normal,
+}
+
+impl Emit {
+    pub fn evaluate(&self, incident: &Ray, hit: &Hit, _scene_data: &SceneData, _rng: &mut Randomizer) -> Color {
+        match self {
+            Self::None => rgb(0.0, 0.0, 0.0),
+            Self::Normal => hit.normal,
+            Self::SkyBackground => {
+                let t = 0.5 * (incident.direction.y / incident.direction.magnitude() + 1.0);
+                (1.0 - t) * rgb(1.0, 1.0, 1.0) + t * rgb(0.5, 0.7, 1.0)
+            }
+        }
+    }
+}
+
+// ------------------------------------------- Absorption -------------------------------------------
+
+#[derive(Debug, Clone)]
+pub enum Absorb {
+    BlackBody,
+    WhiteBody,
+    Albedo(Color),
+    AlbedoMap(TextureId),
+}
+
+impl Absorb {
+    pub fn evaluate(&self, incident: &Ray, hit: &Hit, scene_data: &SceneData, rng: &mut Randomizer) -> Color {
+        match self {
+            Self::BlackBody => rgb(0.0, 0.0, 0.0),
+            Self::WhiteBody => rgb(1.0, 1.0, 1.0),
+            Self::Albedo(color) => *color,
+            Self::AlbedoMap(tid) => scene_data.texture_table[tid.to_index()].sample(incident, hit, scene_data, rng),
+        }
+    }
+}
+
+// ------------------------------------------- Material -------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct Material {
+    scatter: Scatter,
+    absorb: Absorb,
+    emit: Emit,
+}
+
+pub struct MaterialOutput {
+    pub scatter: Option<Ray>,
+    pub absorb: Color,
+    pub emit: Color,
+}
+
+impl Material {
+    pub fn new(scatter: Scatter, absorb: Absorb, emit: Emit) -> Material {
+        Material {scatter, emit, absorb}
+    }
+
+    pub fn evaluate(&self, incident: &Ray, hit: &Hit, scene_data: &SceneData, rng: &mut Randomizer) -> MaterialOutput
+    {
+        let scatter = self.scatter.evaluate(incident, hit, scene_data, rng);
+        let absorb = self.absorb.evaluate(incident, hit, scene_data, rng);
+        let emit = self.emit.evaluate(incident, hit, scene_data, rng);
+        MaterialOutput {scatter, emit, absorb}
+    }
+}
+
+// ------------------------------------------- Scattering implementations -------------------------------------------
+
+fn evaluate_lambert(incident: &Ray, hit: &Hit, rng: &mut Randomizer) -> Option<Ray> {
     if hit.normal.dot(&incident.direction) > 0.0 {
         return None
     }
@@ -46,15 +119,10 @@ fn scatter_lambert(incident: &Ray, hit: &Hit, scene_data: &SceneData, rng: &mut 
         t_min: RAY_EPSILON,
         t_max: INFINITY,
     };
-
-    let albedo = scene_data.texture_table[albedo.to_index()].sample(incident, hit, scene_data, rng);
-
-    Some((albedo, scattered))
+    Some(scattered)
 }
 
-fn scatter_metal(incident: &Ray, hit: &Hit, _scene_data: &SceneData, rng: &mut Randomizer, albedo: Color,
-    fuzziness: Real) -> Option<(Color, Ray)>
-{
+fn evaluate_metal(incident: &Ray, hit: &Hit, rng: &mut Randomizer, fuzziness: Real) -> Option<Ray> {
     if hit.normal.dot(&incident.direction) > 0.0 {
         return None
     }
@@ -73,12 +141,10 @@ fn scatter_metal(incident: &Ray, hit: &Hit, _scene_data: &SceneData, rng: &mut R
         t_min: RAY_EPSILON,
         t_max: INFINITY,
     };
-    Some((albedo, reflected))
+    Some(reflected)
 }
 
-fn scatter_dielectric(incident: &Ray, hit: &Hit, _scene_data: &SceneData, rng: &mut Randomizer, refraction_index: Real)
-    -> Option<(Color, Ray)>
-{
+fn evaluate_dielectric(incident: &Ray, hit: &Hit, rng: &mut Randomizer, refraction_index: Real) -> Option<Ray> {
     let (eta, normal) = if hit.normal.dot(&incident.direction) > 0.0 {
         // Interior
         (refraction_index, -hit.normal)
@@ -103,5 +169,5 @@ fn scatter_dielectric(incident: &Ray, hit: &Hit, _scene_data: &SceneData, rng: &
         t_min: RAY_EPSILON,
         t_max: INFINITY,
     };
-    Some((rgb(1.0, 1.0, 1.0), bounce))
+    Some(bounce)
 }
