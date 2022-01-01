@@ -5,9 +5,7 @@ In this file:
 - Image tiling
 */
 
-use std::fs::File;
-use std::io::{Read, Write, BufReader, BufWriter};
-use std::error::Error;
+// ------------------------------------------- Image storage -------------------------------------------
 
 #[derive(Debug, Clone)]
 pub struct Array2d<T> {
@@ -42,8 +40,11 @@ impl<'a, T: Clone + Default + 'a> Array2d<T> {
 // ------------------------------------------- Image loading and saving -------------------------------------------
 
 pub mod tga {
-    use std::convert::TryInto;
     use super::*;
+    use std::convert::TryInto;
+    use std::fs::File;
+    use std::io::{Read, Write, BufReader, BufWriter};
+    use std::error::Error;
 
     #[repr(C)]
     #[derive(Default, Debug)]
@@ -81,7 +82,6 @@ pub mod tga {
         header_ok &= header.id_length == 0;
         header_ok &= header.colormap_type == 0;
         header_ok &= header.datatype_code == 2; // 2 = uncompressed color data
-        header_ok &= header.image_desc == 0 || header.image_desc == 1 << 5; // any image origin is allowed
         header_ok &= header.bits_per_pixel == 24 || header.bits_per_pixel == 32; // BGR or BGRA
         if !header_ok {
             return Err(format!("This tga header is not supported: {:?}", header).into())
@@ -92,7 +92,7 @@ pub mod tga {
         for y in 0..image.height {
             for x in 0..image.width {
                 // To flip vertically or not
-                let y = if header.image_desc == 1 << 5 {
+                let y = if (header.image_desc & 1 << 5) != 0 {
                     image.height - 1 - y
                 } else {
                     y

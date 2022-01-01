@@ -1,5 +1,7 @@
 use crate::utility::*;
-use crate::hittable::*;
+use crate::hittable::Hittable;
+use crate::material::MaterialId;
+use crate::render::SceneData;
 
 // ------------------------------------------- Bounding volume hieracrchy -------------------------------------------
 
@@ -31,7 +33,9 @@ pub struct Bvh {
     root: NodeId,
 }
 
-fn make_bvh(content: &mut [(LeafId, AABB)], sort_axis: usize, nodes: &mut Vec<BvhNode>) -> NodeId {
+fn make_bvh(content: &mut [(LeafId, AABB)], sort_axis: usize, nodes: &mut Vec<BvhNode>) 
+    -> NodeId
+{
     match content.len() {
         0 => unreachable!(),
         1 => {
@@ -43,7 +47,8 @@ fn make_bvh(content: &mut [(LeafId, AABB)], sort_axis: usize, nodes: &mut Vec<Bv
             let (left_content, right_content) = split(content, sort_axis);
             let left = make_bvh(left_content, (sort_axis + 1) % 3, nodes);
             let right = make_bvh(right_content, (sort_axis + 1) % 3, nodes);
-            let aabb = nodes[left as usize].bounding_box().union(nodes[right as usize].bounding_box());
+            let aabb = nodes[left as usize].bounding_box()
+                .union(nodes[right as usize].bounding_box());
             nodes.push(BvhNode::Branch {left, right, aabb});
             (nodes.len() - 1) as NodeId
         }
@@ -62,15 +67,15 @@ fn split(content: &mut [(LeafId, AABB)], sort_axis: usize) -> (&mut [(LeafId, AA
 }
 
 impl Bvh {
-    pub fn new(hittables: Vec<Hittable>) -> Self {
-        let mut content = hittables.iter().enumerate().map(|(id, x)| (id as LeafId, x.bounding_box()))
+    pub fn new(hittables: Vec<Hittable>, scene_data: &SceneData) -> Self {
+        let mut content = hittables.iter().enumerate().map(|(id, x)| (id as LeafId, x.bounding_box(scene_data)))
             .collect::<Vec<_>>();
         
         let mut nodes = Vec::new();
         let root = make_bvh(&mut content, 0, &mut nodes);
 
         // nodes.iter().enumerate().for_each(|(id, n)| match n {
-        //     BvhNode::Leaf {..} => println!("#{}: Leaf", id),
+        //     BvhNode::Leaf {..} => println!("#{}: Leaf ({:?})", id, content[id].1),
         //     BvhNode::Branch {left, right, ..} => println!("#{}: Branch (#{}, #{})", id, left, right),
         // });
         // println!("Recap: {} branches, {} leaves",
@@ -85,18 +90,24 @@ impl Bvh {
         }
     }
 
-    fn hit_node(&self, ray: &RayExpanded, node: NodeId) -> Option<(Hit, MaterialId)> {
+    fn hit_node(&self, ray: &RayExpanded, node: NodeId, scene_data: &SceneData) -> Option<(Hit, MaterialId)> {
         match &self.nodes[node as usize] {
-            BvhNode::Leaf {leaf, ..} => self.leaves[*leaf as usize].hit(&ray.inner),
+            BvhNode::Leaf {aabb, leaf} => {
+                if aabb.collide(ray) {
+                    self.leaves[*leaf as usize].hit(&ray.inner, scene_data)
+                } else {
+                    None
+                }
+            },
             BvhNode::Branch {aabb, left, right} => {
                 if aabb.collide(ray) {
                     let mut hit = None;
                     let mut ray = ray.clone();
-                    if let Some(new_hit) = self.hit_node(&ray, *left) {
+                    if let Some(new_hit) = self.hit_node(&ray, *left, scene_data) {
                         ray.inner.t_max = new_hit.0.t;
                         hit.replace(new_hit);
                     }
-                    if let Some(new_hit) = self.hit_node(&ray, *right) {
+                    if let Some(new_hit) = self.hit_node(&ray, *right, scene_data) {
                         hit.replace(new_hit);
                     }
                     hit
@@ -107,8 +118,8 @@ impl Bvh {
         }
     }
 
-    pub fn hit(&self, ray: &Ray) -> Option<(Hit, MaterialId)> {
+    pub fn hit(&self, ray: &Ray, scene_data: &SceneData) -> Option<(Hit, MaterialId)> {
         let ray = ray.clone().expand();
-        self.hit_node(&ray, self.root)
+        self.hit_node(&ray, self.root, scene_data)
     }
 }

@@ -9,6 +9,7 @@ edition = "2018"
 nalgebra = "0.29.0"
 rand = "0.8.4"
 indicatif = "0.16.2"
+nom = "7.1.0"
 
 [profile.release]
 debug = true # Have debugging symbols for profiling

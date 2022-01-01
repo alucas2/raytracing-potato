@@ -28,21 +28,21 @@ pub use nalgebra::{vector, matrix};
 
 /// Nudge the start of the ray to avoid self-intersection
 pub const RAY_EPSILON: Real = 1e-3;
+pub const SMOL: Real = 1e-7;
 
-/// An index into the material table
-#[derive(Debug, Clone, Copy)]
-pub struct MaterialId(pub u32);
+/// A macro to quickly declare an index wrapper
+#[macro_export]
+macro_rules! declare_index_wrapper {
+    ($WrapperType: ident, $InnerType: ident) => {
+        #[derive(Debug, Clone, Copy)]
+        pub struct $WrapperType(pub $InnerType);
 
-impl MaterialId {
-    pub fn to_index(self) -> usize {self.0 as usize}
-}
-
-/// An index into the texture table
-#[derive(Debug, Clone, Copy)]
-pub struct TextureId(pub u32);
-
-impl TextureId {
-    pub fn to_index(self) -> usize {self.0 as usize}
+        impl $WrapperType {
+            pub fn to_index(self) -> usize {
+                self.0 as usize
+            }
+        }
+    };
 }
 
 // ------------------------------------------- Ray -------------------------------------------
@@ -89,6 +89,7 @@ pub struct Hit {
 }
 
 impl Hit {
+    /// Pretends to hit a sphere infinitely far away with equirectangular texture coordinates
     pub fn at_infinity(direction: &Rvec3) -> Hit {
         Hit {
             t: INFINITY,
@@ -149,7 +150,7 @@ impl AABB {
             .min(t0.y.max(t1.y))
             .min(t0.z.max(t1.z));
 
-        t_max > t_min
+        t_max >= t_min
     }
 }
 

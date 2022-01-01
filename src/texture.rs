@@ -3,10 +3,13 @@ use crate::randomness::*;
 use crate::render::SceneData;
 use crate::image::Array2d;
 
+declare_index_wrapper!(TextureId, u32);
+
 // ------------------------------------------- Texture -------------------------------------------
 
 pub enum Texture {
     Missing,
+    DebugUVs,
     Solid(Color),
     Image(Array2d<[u8; 4]>),
     Checker {odd: TextureId, even: TextureId},
@@ -18,6 +21,7 @@ impl Texture {
     pub fn sample(&self, incident: &Ray, hit: &Hit, scene_data: &SceneData, rng: &mut Randomizer) -> Color {
         match self {
             Self::Missing => rgb(0.0, 0.0, 0.0),
+            Self::DebugUVs => rgb(hit.uv.x, hit.uv.y, 0.0),
             Self::Solid(color) => *color,
             Self::Image(image)
                 => sample_image(incident, hit, scene_data, rng, image),

@@ -1,14 +1,16 @@
-use crate::material::Emit;
 use crate::utility::*;
 use crate::randomness::*;
 use crate::hittable::Hittable;
 use crate::material::Material;
 use crate::texture::Texture;
+use crate::mesh::Mesh;
+use crate::material::Emit;
 
 /// Global data to be shared by the rendering workers.
 pub struct SceneData {
     pub material_table: Vec<Material>,
     pub texture_table: Vec<Texture>,
+    pub mesh_table: Vec<Mesh>,
 }
 
 // ------------------------------------------- Camera -------------------------------------------
@@ -100,7 +102,7 @@ pub fn trace_path(scene: &Hittable, ray: &Ray, depth: usize, scene_data: &SceneD
 fn trace_path_first(scene: &Hittable, ray: &Ray, depth: usize, scene_data: &SceneData, rng: &mut Randomizer,
     background: &Emit) -> PathTraceOutput
 {
-    if let Some((hit, material)) = scene.hit(ray) {
+    if let Some((hit, material)) = scene.hit(ray, scene_data) {
         let mut mat_out = scene_data.material_table[material.to_index()].evaluate(ray, &hit, scene_data, rng);
         let normal = hit.normal;
         let final_color = mat_out.emit + mat_out.scatter.take().map_or(
@@ -128,7 +130,7 @@ fn trace_path_continue(scene: &Hittable, ray: &Ray, depth: usize, scene_data: &S
         return rgb(0.0, 0.0, 0.0)
     }
 
-    if let Some((hit, material)) = scene.hit(ray) {
+    if let Some((hit, material)) = scene.hit(ray, scene_data) {
         let mut mat_out = scene_data.material_table[material.to_index()].evaluate(ray, &hit, scene_data, rng);
         mat_out.emit + mat_out.scatter.take().map_or(
             // Absorb

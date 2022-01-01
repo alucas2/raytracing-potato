@@ -10,24 +10,26 @@ use indicatif::ProgressBar;
 mod example_scenes;
 
 fn main() {
-    let (output_width, output_height) = (1280, 720);
+    let (output_width, output_height) = (800, 600);
 
     // Load the scene
     // let mut scene = example_scenes::three_balls();
     // let mut scene = example_scenes::two_balls();
     // let mut scene = example_scenes::more_balls_optimized();
-    let mut scene = example_scenes::earth();
+    // let mut scene = example_scenes::earth();
+    // let mut scene = example_scenes::one_triangle();
+    let mut scene = example_scenes::bunny();
     scene.camera.aspect_ratio = output_width as Real / output_height as Real;
 
     // Renderer parameters
-    let max_bounce = 8;
+    let max_bounce = 8; 
     let tile_size = 32;
     let num_workers = 4;
 
     let sampler = Multisampler {
         width: output_width,
         height: output_height,
-        num_samples: 1,
+        num_samples: 4,
     };
     
     // Put tiles into the job queue

@@ -9,6 +9,9 @@ In this file:
 use crate::utility::*;
 use crate::randomness::*;
 use crate::render::SceneData;
+use crate::texture::TextureId;
+
+declare_index_wrapper!(MaterialId, u32);
 
 // ------------------------------------------- Scattering -------------------------------------------
 
@@ -36,19 +39,23 @@ impl Scatter {
 #[derive(Debug, Clone)]
 pub enum Emit {
     None,
-    SkyBackground,
-    Normal,
+    DebugNormals,
+    Color(Color),
+    SkyGradient,
+    SkySphere(TextureId),
 }
 
 impl Emit {
-    pub fn evaluate(&self, incident: &Ray, hit: &Hit, _scene_data: &SceneData, _rng: &mut Randomizer) -> Color {
+    pub fn evaluate(&self, incident: &Ray, hit: &Hit, scene_data: &SceneData, rng: &mut Randomizer) -> Color {
         match self {
             Self::None => rgb(0.0, 0.0, 0.0),
-            Self::Normal => hit.normal,
-            Self::SkyBackground => {
+            Self::Color(color) => *color,
+            Self::DebugNormals => hit.normal,
+            Self::SkyGradient => {
                 let t = 0.5 * (incident.direction.y / incident.direction.magnitude() + 1.0);
                 (1.0 - t) * rgb(1.0, 1.0, 1.0) + t * rgb(0.5, 0.7, 1.0)
             }
+            Self::SkySphere(tid) => scene_data.texture_table[tid.to_index()].sample(incident, hit, scene_data, rng),
         }
     }
 }

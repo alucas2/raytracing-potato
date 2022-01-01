@@ -6,6 +6,7 @@ use raytracing2::texture::*;
 use raytracing2::render::*;
 use raytracing2::randomness::*;
 use raytracing2::image::*;
+use raytracing2::mesh::*;
 
 // TODO: Have a scene verifier that detects missing texture/material and circular references?
 // It would use string ids instead of integers for ease of use and to allow the merging or multiple scenes
@@ -53,8 +54,8 @@ pub fn three_balls() -> ExampleScene {
         Hittable::Sphere {center: vector![1.0, 0.0, -1.0], radius: 0.5, material: MaterialId(3)}, // Glass sphere
     ]);
 
-    let scene_data = SceneData {material_table, texture_table};
-    let background = Emit::SkyBackground;
+    let scene_data = SceneData {material_table, texture_table, mesh_table: Vec::new()};
+    let background = Emit::SkyGradient;
     ExampleScene {camera, scene_data, root, background}
 }
 
@@ -131,8 +132,8 @@ pub fn more_balls() -> ExampleScene {
         }
     }
 
-    let scene_data = SceneData {material_table, texture_table};
-    let background = Emit::SkyBackground;
+    let scene_data = SceneData {material_table, texture_table, mesh_table: Vec::new()};
+    let background = Emit::SkyGradient;
     ExampleScene {camera, scene_data, root: Hittable::List(root), background}
 }
 
@@ -144,7 +145,7 @@ pub fn more_balls_optimized() -> ExampleScene {
     } else {
         unreachable!()
     };
-    example_scene.root = Hittable::Bvh(Bvh::new(list));
+    example_scene.root = Hittable::Bvh(Bvh::new(list, &example_scene.scene_data));
     example_scene
 }
 
@@ -174,13 +175,14 @@ pub fn two_balls() -> ExampleScene {
         Material::new(Scatter::Lambert, Absorb::AlbedoMap(TextureId(3)), Emit::None),
     ];
 
+    let scene_data = SceneData {material_table, texture_table, mesh_table: Vec::new()};
+
     let root = Hittable::Bvh(Bvh::new(vec![
         Hittable::Sphere {center: vector![0.0, -10.0, 0.0], radius: 10.0, material: MaterialId(0)},
         Hittable::Sphere {center: vector![0.0, 10.0, 0.0], radius: 10.0, material: MaterialId(1)},
-    ]));
+    ], &scene_data));
 
-    let scene_data = SceneData {material_table, texture_table};
-    let background = Emit::SkyBackground;
+    let background = Emit::SkyGradient;
     ExampleScene {camera, scene_data, root, background}
 }
 
@@ -206,11 +208,143 @@ pub fn earth() -> ExampleScene {
         Material::new(Scatter::Lambert, Absorb::AlbedoMap(TextureId(0)), Emit::None)
     ];
 
+    let scene_data = SceneData {material_table, texture_table, mesh_table: Vec::new()};
+    
     let root = Hittable::Bvh(Bvh::new(vec![
         Hittable::Sphere {center: vector![0.0, 0.0, 0.0], radius: 2.0, material: MaterialId(0)}
-    ]));
+    ], &scene_data));
 
-    let scene_data = SceneData {material_table, texture_table};
-    let background = Emit::SkyBackground;
+    let background = Emit::SkyGradient;
     ExampleScene {camera, root, scene_data, background}
+}
+
+#[allow(dead_code)]
+pub fn one_triangle() -> ExampleScene {
+    let normal = vector![1.0, 1.0, 1.0].normalize();
+    let uv = vector![0.0, 0.0];
+
+    let material_table = vec![
+        Material::new(Scatter::None, Absorb::BlackBody, Emit::DebugNormals),
+        Material::new(Scatter::Lambert, Absorb::Albedo(rgb(0.1, 0.2, 0.5)), Emit::None)
+    ];
+
+    let mesh_table = vec![
+        Mesh {
+            vertices: vec![
+                Vertex {position: vector![1.0, 0.0, 0.0], normal, uv},
+                Vertex {position: vector![0.0, 1.0, 0.0], normal, uv},
+                Vertex {position: vector![0.0, 0.0, 1.0], normal, uv},
+            ],
+            indices: vec![0, 1, 2],
+            material: MaterialId(0)
+        }
+    ];
+
+    let scene_data = SceneData {material_table, mesh_table, texture_table: Vec::new()};
+    let root = Hittable::Bvh(Bvh::new(vec![
+        Hittable::Triangle {triangle: TriangleId(0), mesh: MeshId(0)}, // One lone triangle
+        Hittable::Sphere {center: vector![0.0, -1000.0, -1.0], radius: 1000.0, material: MaterialId(1)}, // Ground
+    ], &scene_data));
+    let background = Emit::SkyGradient;
+    let camera = Camera {
+        aspect_ratio: 1.0,
+        fov: FRAC_PI_2,
+        focal_dist: 1.0,
+        lens_radius: 0.0,
+        transformation: Transformation::lookat(
+            &vector![2.0, 0.5, 1.0],
+            &vector![0.0, 0.0, 0.0],
+            &vector![0.0, 1.0, 0.0]
+        ),
+    };
+
+    ExampleScene {root, camera, scene_data, background}
+}
+
+#[allow(dead_code)]
+pub fn glass_bunny() -> ExampleScene {
+    let bunny = obj::load("assets/bunny_flat.obj").unwrap();
+    let mut hittable_list = Vec::new();
+
+    let material_table = vec![
+        Material::new(Scatter::Dielectric {refraction_index: 1.5}, Absorb::Albedo(rgb(0.7, 0.8, 0.7)), Emit::None),
+        Material::new(Scatter::Metal {fuzziness: 0.05}, Absorb::Albedo(rgb(0.8, 0.8, 0.8)), Emit::None)
+    ];
+
+    let texture_table = vec![
+        Texture::Image(tga::load("assets/sky_panorama.tga").unwrap())
+    ];
+
+    hittable_list.extend(
+        bunny.iter_triangles().map(|tid| Hittable::Triangle {triangle: tid, mesh: MeshId(0)})
+    );
+    hittable_list.push(
+        Hittable::Sphere {center: vector![0.0, -1000.0, -1.0], radius: 1000.0, material: MaterialId(1)}
+    );
+
+    let mesh_table = vec![
+        bunny
+    ];
+
+    let scene_data = SceneData {material_table, mesh_table, texture_table};
+    let root = Hittable::Bvh(Bvh::new(hittable_list, &scene_data));
+    // let root = Hittable::List(hittable_list); // OOH THAT'S SLOW
+    let background = Emit::SkySphere(TextureId(0));
+    let camera = Camera {
+        aspect_ratio: 1.0,
+        fov: FRAC_PI_4,
+        focal_dist: 1.0,
+        lens_radius: 0.0,
+        transformation: Transformation::lookat(
+            &vector![-1.5, 1.5, 2.5],
+            &vector![0.0, 0.5, 0.0],
+            &vector![0.0, 1.0, 0.0]
+        ),
+    };
+
+    ExampleScene {root, camera, scene_data, background}
+}
+
+#[allow(dead_code)]
+pub fn bunny() -> ExampleScene {
+    let bunny = obj::load("assets/bunny.obj").unwrap();
+    let mut hittable_list = Vec::new();
+
+    let material_table = vec![
+        Material::new(Scatter::None, Absorb::BlackBody, Emit::DebugNormals),
+        Material::new(Scatter::Metal {fuzziness: 0.05}, Absorb::Albedo(rgb(0.8, 0.8, 0.8)), Emit::None)
+    ];
+
+    let texture_table = vec![
+        Texture::Image(tga::load("assets/sky_panorama.tga").unwrap())
+    ];
+
+    hittable_list.extend(
+        bunny.iter_triangles().map(|tid| Hittable::Triangle {triangle: tid, mesh: MeshId(0)})
+    );
+    hittable_list.push(
+        Hittable::Sphere {center: vector![0.0, -1000.0, -1.0], radius: 1000.0, material: MaterialId(1)}
+    );
+
+    let mesh_table = vec![
+        bunny
+    ];
+
+    let scene_data = SceneData {material_table, mesh_table, texture_table};
+    let root = Hittable::Bvh(Bvh::new(hittable_list, &scene_data));
+    // let root = Hittable::List(hittable_list); // OOH THAT'S SLOW
+    let background = Emit::SkySphere(TextureId(0));
+    let camera = Camera {
+        aspect_ratio: 1.0,
+        fov: FRAC_PI_4,
+        focal_dist: 1.0,
+        lens_radius: 0.0,
+        transformation: Transformation::lookat(
+            &vector![-1.5, 1.5, 2.5],
+            &vector![0.0, 0.5, 0.0],
+            &vector![0.0, 1.0, 0.0]
+        ),
+    };
+
+    ExampleScene {root, camera, scene_data, background}
 }
